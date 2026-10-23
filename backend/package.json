@@ -1,0 +1,19 @@
+{
+  "name": "pipeline-autotask-api",
+  "version": "1.0.0",
+  "description": "Single Azure Function that backs the Pipeline Kanban board. Authenticates users via Entra ID, talks to the Autotask REST API as the signed-in user, and stores config/sessions in Key Vault + Table Storage.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"no tests yet\""
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0",
+    "@azure/identity": "^4.4.1",
+    "@azure/keyvault-secrets": "^4.8.0",
+    "@azure/data-tables": "^13.2.2",
+    "jwks-rsa": "^3.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "otplib": "^12.0.1"
+  }
+}

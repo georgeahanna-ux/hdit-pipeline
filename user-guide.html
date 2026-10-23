@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pipeline — User Guide</title>
+<style>
+  :root{
+    --ink:#0d1424; --accent:#0f766e; --accent-deep:#0b5e57; --accent-wash:#e8f3f2;
+    --line:#e3e7ee; --muted:#55606b; --bg:#f5f7fa; --warn:#9a6700; --warn-bg:#fff4d6; --ok:#0f766e; --ok-bg:#e8f3f2;
+    --font-ui:'Segoe UI',Inter,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{font-family:var(--font-ui); color:var(--ink); background:var(--bg); line-height:1.6}
+  a{color:var(--accent-deep)}
+  header.top{position:sticky; top:0; z-index:5; background:var(--ink); color:#fff; padding:14px 24px; display:flex; align-items:center; gap:14px}
+  header.top img{height:40px; background:#fff; padding:6px 10px; border-radius:8px}
+  header.top .t{font-weight:800; font-size:18px}
+  header.top .t small{display:block; font-weight:500; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:#9fb0c8}
+  header.top .print{margin-left:auto; background:transparent; border:1px solid rgba(255,255,255,.25); color:#fff; border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer}
+  .wrap{max-width:860px; margin:0 auto; padding:24px}
+  .ver-banner{border-radius:10px; padding:11px 15px; font-size:14px; margin:18px 0}
+  .ver-banner.ok{background:var(--ok-bg); color:var(--ok); border:1px solid #bfe0dd}
+  .ver-banner.warn{background:var(--warn-bg); color:var(--warn); border:1px solid #f0d999}
+  h1{font-size:26px; margin:6px 0 2px}
+  h2{font-size:19px; margin:30px 0 8px; color:var(--accent-deep); border-bottom:2px solid #bfe0dd; padding-bottom:5px}
+  h3{font-size:15px; margin:18px 0 4px}
+  .toc{background:#fff; border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin:14px 0 8px}
+  .toc h2{border:0; margin:0 0 6px; font-size:15px; color:var(--ink)}
+  .toc ol{margin:0; padding-left:20px} .toc li{margin:2px 0}
+  table{border-collapse:collapse; width:100%; margin:10px 0; font-size:14px; background:#fff}
+  th,td{border:1px solid #d8dee6; padding:8px 11px; text-align:left; vertical-align:top}
+  th{background:var(--accent); color:#fff; font-weight:600}
+  tr:nth-child(even) td{background:#f4f8f8}
+  code,.kbd{background:#eef1f5; border:1px solid #dfe4ea; border-radius:5px; padding:1px 6px; font-size:.92em}
+  .callout{background:var(--accent-wash); border-left:4px solid var(--accent); border-radius:8px; padding:12px 16px; margin:14px 0}
+  .callout b{color:var(--accent-deep)}
+  footer{color:var(--muted); font-size:13px; text-align:center; padding:30px 16px}
+  @media print{ header.top .print{display:none} header.top{position:static} .ver-banner.warn{border:1px solid #999} }
+</style>
+</head>
+<body>
+<header class="top">
+  <img src="data:image/png;base64,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" alt="HD IT" />
+  <div class="t">Pipeline<small>Autotask Sales Board · User Guide</small></div>
+  <button class="print" onclick="window.print()">Print</button>
+</header>
+
+<div class="wrap">
+  <div class="ver-banner" id="verBanner"></div>
+  <h1>Pipeline User Guide</h1>
+  <p>A quick, visual way to manage your active Autotask sales opportunities.</p>
+
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#welcome">Welcome to Pipeline</a></li>
+      <li><a href="#signin">Signing in</a></li>
+      <li><a href="#board">The board at a glance</a></li>
+      <li><a href="#topbar">The top bar</a></li>
+      <li><a href="#work">Working with an opportunity</a></li>
+      <li><a href="#filter">Filtering and sorting</a></li>
+      <li><a href="#weighted">Understanding the weighted pipeline</a></li>
+      <li><a href="#faq">Tips and FAQ</a></li>
+      <li><a href="#quick">Quick reference</a></li>
+    </ol>
+  </div>
+
+  <h2 id="welcome">1. Welcome to Pipeline</h2>
+  <p><b>Pipeline</b> is a simple, visual board for the opportunities in your Autotask sales process. Each column is a sales stage, and each card is one active opportunity. You can see your whole pipeline at a glance, move deals along as they progress, keep notes, and jump straight to the related quote or ticket.</p>
+  <p>Everything you do in Pipeline talks directly to Autotask. Move a card, change a date, update a probability, or add a note, and it is written back to the matching opportunity in Autotask straight away.</p>
+  <div class="callout"><b>Before you start.</b> You'll need the shared team password (ask your manager). Pipeline works best in a current version of Microsoft Edge or Google Chrome.</div>
+
+  <h2 id="signin">2. Signing in</h2>
+  <p>Signing in takes two quick steps. Choosing your name is what lets Pipeline record your notes against the right person in Autotask.</p>
+  <ol>
+    <li>Open the board's web address. You'll see the sign-in screen.</li>
+    <li>Enter the team password and click <b>Continue</b>.</li>
+    <li>Choose your name from the drop-down list. If your team has two-factor sign-in turned on, also enter the current <b>authenticator code</b> from LastPass. Then click <b>Enter pipeline</b>.</li>
+  </ol>
+  <h3>Staying signed in</h3>
+  <p>Pipeline remembers you on that browser for about 12 hours. After that, or on a new device, you'll be asked for the password and your name again.</p>
+  <h3>Signing out</h3>
+  <p>Click your initials in the top-right corner, then choose <b>Sign out</b>.</p>
+  <div class="callout"><b>Why pick your name?</b> Pipeline uses one shared password, then asks who you are. The name you choose is stamped on every note you add, so colleagues (and Autotask) can see who recorded each update. Always select your own name.</div>
+
+  <h2 id="board">3. The board at a glance</h2>
+  <h3>Columns are stages</h3>
+  <p>Each column is a sales stage from your Autotask process, arranged left to right in order. Under each stage name you'll see how many opportunities are in that stage, the total one-off value sitting there, and the total monthly recurring revenue (shown as a <code>/mo</code> figure) where a stage has any.</p>
+  <h3>Cards are opportunities</h3>
+  <p>Each card shows the opportunity title and company, the one-off value with the win probability next to it (e.g. $24,656 and 50%), monthly recurring revenue if any, the projected close date, the latest human note, the quote number if a quote is linked, and a small <b>ticket icon</b> — highlighted (with a count if more than one) when the opportunity has a linked ticket, faded when it has none. Click a card to open its full detail.</p>
+
+  <h2 id="topbar">4. The top bar</h2>
+  <table>
+    <tr><th>Control</th><th>What it does</th></tr>
+    <tr><td><b>Active opportunities</b></td><td>A live count of the opportunities currently shown, based on your filters.</td></tr>
+    <tr><td><b>Weighted pipeline</b></td><td>A forecast figure — see section 7.</td></tr>
+    <tr><td><b>Owner</b></td><td>Limit the board to one opportunity owner.</td></tr>
+    <tr><td><b>Client</b></td><td>Limit the board to one client.</td></tr>
+    <tr><td><b>Period</b></td><td>Filter cards by projected close date (week or month ranges).</td></tr>
+    <tr><td><b>Stages</b></td><td>Show or hide individual stage columns.</td></tr>
+    <tr><td><b>Search</b></td><td>Filter the board to opportunities whose title matches what you type.</td></tr>
+    <tr><td><b>Refresh</b></td><td>Pull the latest data from Autotask.</td></tr>
+    <tr><td><b>Help</b></td><td>Open this guide or the change log.</td></tr>
+    <tr><td><b>Your initials</b></td><td>Account menu — sign out.</td></tr>
+  </table>
+
+  <h2 id="work">5. Working with an opportunity</h2>
+  <h3>Move a deal to another stage</h3>
+  <p><b>Drag its card</b> into the new stage column. The opportunity's stage is updated in Autotask immediately.</p>
+  <h3>Edit the details</h3>
+  <p>Click a card to open the detail panel. You can change the title, description, projected close date and probability, then click <b>Save changes</b>. The company, owner, one-off value and monthly recurring revenue are shown for reference and are edited in Autotask itself.</p>
+  <h3>Add a note</h3>
+  <p>Type your update in the <b>Add a note</b> box and click <b>Add note</b>. The note is saved to Autotask under the name you signed in with, and the most recent note appears on the card.</p>
+  <h3>The activity feed</h3>
+  <p>The detail panel lists the most recent notes people have added. Automatic, system-generated entries are filtered out, so you only ever see real human updates.</p>
+  <div class="callout"><b>Who gets the credit?</b> Notes are recorded under the name you chose at sign-in. Stage moves, date changes and probability updates are saved through the integration account rather than your personal name — the change still happens, it's simply attributed to the integration.</div>
+
+  <h2 id="filter">6. Filtering and sorting</h2>
+  <p>The filters work together — you can show one owner's deals, for one client, closing this week. The headline numbers always reflect the active filters.</p>
+  <h3>Filter by owner / client</h3>
+  <p>Use the <b>All owners</b> and <b>All clients</b> drop-downs (built automatically from the deals on the board). Choose the "All" option again to clear.</p>
+  <h3>Search by title</h3>
+  <p>Use the <b>Search</b> box at the top of the board to find an opportunity by name. As you type, the board narrows to cards whose title contains your text, and the headline counts update to match. Search combines with the owner, client and period filters, so you can search within a filtered view. Click the <b>×</b> in the box to clear it.</p>
+  <h3>Filter by period</h3>
+  <p>The <b>Period</b> drop-down narrows the board by projected close date. Options are grouped into <b>By week</b> and <b>By month</b>, and it opens on Current Month.</p>
+  <table>
+    <tr><th>Period option</th><th>Shows opportunities closing…</th></tr>
+    <tr><td>Last Week</td><td>during last week (Mon–Sun)</td></tr>
+    <tr><td>Current Week</td><td>during this week</td></tr>
+    <tr><td>Next Week</td><td>during next week</td></tr>
+    <tr><td>Older than Last Month</td><td>before the start of last month</td></tr>
+    <tr><td>Last Month</td><td>during last calendar month</td></tr>
+    <tr><td>Current Month</td><td>during this calendar month (default)</td></tr>
+    <tr><td>Next Month</td><td>during next calendar month</td></tr>
+    <tr><td>Further than Next Month</td><td>after the end of next month</td></tr>
+  </table>
+  <h3>Show or hide stages</h3>
+  <p>Click <b>Stages</b> to tick the columns you want. Your choice is remembered in that browser, and hidden stages are left out of the headline totals.</p>
+  <h3>Sort a stage</h3>
+  <p>Each stage header has four small buttons: <code>$</code> (one-off value), <code>%</code> (probability), <code>ID</code> (opportunity ID) and <code>Date</code> (projected close date). Click to sort; click again to flip direction. Undated opportunities sort to the bottom. The default is value, highest first.</p>
+
+  <h2 id="weighted">7. Understanding the weighted pipeline</h2>
+  <p>The Weighted pipeline figure is a forecast: <b>one-off value × probability</b>, added up across qualifying opportunities. Points to know:</p>
+  <ul>
+    <li>It counts <b>Stage 6 and Stage 7 opportunities only</b> — the deals closest to closing.</li>
+    <li>It uses <b>one-off revenue only</b>; monthly recurring is not included.</li>
+    <li>The probability comes from each opportunity's own field — a deal at 0% adds nothing.</li>
+    <li>It respects the <b>Period</b> filter.</li>
+  </ul>
+  <p>Example: a $10,000 deal at 50% contributes $5,000, and a $4,000 deal at 25% contributes $1,000 — together $6,000 of weighted pipeline.</p>
+
+  <h2 id="faq">8. Tips and FAQ</h2>
+  <h3>A note I added isn't on the card</h3>
+  <p>The card preview shows the latest note and updates as soon as you add one. Open the card to see the full list. Only human notes are shown — Autotask's automatic change entries are deliberately left out.</p>
+  <h3>The board looks out of date</h3>
+  <p>Click <b>Refresh</b>. If you've just had an update deployed, hard-refresh with <span class="kbd">Ctrl + Shift + R</span>.</p>
+  <h3>A column looks empty</h3>
+  <p>Check the Period, Owner and Client filters — a column can look empty simply because nothing matches the current filters.</p>
+  <h3>Quotes and tickets</h3>
+  <p>If an opportunity has a primary quote, its number and a link appear on the card and in the detail. The detail also lists linked tickets (with a Copy button for the ticket numbers), a <b>Create linked ticket</b> button that opens Autotask's new-ticket screen already linked, and an <b>Associate existing ticket</b> button. The associate button opens a searchable picker of the opportunity's company tickets — type to filter by number or title (it shows open tickets from the last 6 months, newest first), choose one, and it's linked to the opportunity straight away, with the card and detail updating immediately.</p>
+
+  <h2 id="quick">9. Quick reference</h2>
+  <table>
+    <tr><th>I want to…</th><th>Do this</th></tr>
+    <tr><td>Sign in</td><td>Enter the team password, then choose your name</td></tr>
+    <tr><td>Progress a deal</td><td>Drag its card into the next stage column</td></tr>
+    <tr><td>Edit a deal</td><td>Click the card, change the fields, click Save changes</td></tr>
+    <tr><td>Update the win chance</td><td>Open the card, edit Probability (%), Save changes</td></tr>
+    <tr><td>Add a note</td><td>Open the card, type in Add a note, click Add note</td></tr>
+    <tr><td>Filter to one owner / client</td><td>Use the All owners / All clients drop-down</td></tr>
+    <tr><td>Find an opportunity by name</td><td>Type part of its title in the Search box</td></tr>
+    <tr><td>Focus on a week or month</td><td>Use the Period drop-down</td></tr>
+    <tr><td>Hide a stage</td><td>Click Stages and untick it</td></tr>
+    <tr><td>Sort a stage</td><td>Click the $, %, ID or Date button in the stage header</td></tr>
+    <tr><td>Raise a ticket</td><td>Open the card, click Create linked ticket</td></tr>
+    <tr><td>Sign out</td><td>Click your initials, then Sign out</td></tr>
+  </table>
+</div>
+
+<footer>HD IT · Pipeline User Guide · this guide documents app version <b id="builtFor"></b></footer>
+
+<script>
+  // This page documents the following app version. Regenerated with each release.
+  const BUILT_FOR = "1.12.0";
+  document.getElementById("builtFor").textContent = "v" + BUILT_FOR;
+  const appV = new URLSearchParams(location.search).get("v");
+  const b = document.getElementById("verBanner");
+  if (appV && appV !== BUILT_FOR) {
+    b.className = "ver-banner warn";
+    b.innerHTML = "⚠ You're running app <b>v" + appV + "</b>, but this guide was written for <b>v" + BUILT_FOR + "</b>. Some screens may differ — ask your administrator for the matching guide.";
+  } else {
+    b.className = "ver-banner ok";
+    b.innerHTML = "✓ Up to date — this guide covers Pipeline <b>v" + BUILT_FOR + "</b>" + (appV ? ", which matches the app you're running." : ". Open it from the app's Help menu to confirm it matches your version.");
+  }
+</script>
+</body>
+</html>

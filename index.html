@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Pipeline — Autotask Sales Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+<!-- Single-file app: all styles and logic are inline; no external CDNs required -->
+<!-- Microsoft SSO removed: the app now authenticates with a team password + Autotask resource picker -->
+<style>
+  /* ============================================================
+     DESIGN TOKENS
+     A pipeline reads left→right, so colour warms with progress:
+     cool slate at the lead end, confident teal as the signature,
+     a green cast as deals near "won". Chrome is deep ink; the
+     board surface is a calm off-white so cards carry the colour.
+     ============================================================ */
+  :root{
+    --ink:#0d1424;
+    --ink-soft:#1b2336;
+    --surface:#eef1f6;
+    --card:#ffffff;
+    --line:#e2e6ee;
+    --line-strong:#cfd5e2;
+    --text:#16203a;
+    --muted:#5f6b85;
+    --muted-2:#8a94ab;
+    --accent:#0ea5a4;
+    --accent-deep:#0a7e7d;
+    --accent-wash:#e1f4f3;
+    --warn:#c2410c;
+    --warn-wash:#fdeee5;
+    --danger:#dc2626;
+    --good:#15803d;
+    --shadow-sm:0 1px 2px rgba(13,20,36,.06), 0 1px 3px rgba(13,20,36,.05);
+    --shadow-md:0 6px 16px rgba(13,20,36,.10), 0 2px 6px rgba(13,20,36,.06);
+    --shadow-lg:0 24px 60px rgba(13,20,36,.22);
+    --r-sm:8px; --r-md:12px; --r-lg:18px;
+    --font-ui:"Plus Jakarta Sans", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    --font-body:"Inter", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    --col-w:312px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--surface); color:var(--text);
+    font-family:var(--font-body); font-size:14px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  button{font-family:inherit; cursor:pointer}
+  ::selection{background:var(--accent-wash)}
+  .num{font-variant-numeric:tabular-nums; font-feature-settings:"tnum"}
+
+  /* ---------- App shell ---------- */
+  #app{display:none; height:100vh; grid-template-rows:auto 1fr; min-height:0}
+  #app.ready{display:grid}
+
+  .topbar{
+    display:flex; align-items:center; gap:16px;
+    padding:0 20px; height:60px;
+    background:var(--ink); color:#fff;
+    border-bottom:1px solid #000;
+    z-index:30;
+  }
+  .brand{display:flex; align-items:center; gap:11px; font-family:var(--font-ui); font-weight:800; letter-spacing:-.02em; font-size:17px}
+  .brand .mark{
+    width:26px; height:26px; border-radius:7px; position:relative; flex:0 0 auto;
+    background:linear-gradient(135deg, var(--accent) 0%, #36d0c0 100%);
+    box-shadow:0 0 0 1px rgba(255,255,255,.12) inset;
+  }
+  .brand .mark::before,.brand .mark::after{
+    content:""; position:absolute; top:5px; bottom:5px; width:3px; border-radius:3px; background:rgba(13,20,36,.55);
+  }
+  .brand .mark::before{left:8px; height:10px; top:auto; bottom:6px}
+  .brand .mark::after{left:14px}
+  .brand small{display:block; font-family:var(--font-body); font-weight:500; font-size:10.5px; letter-spacing:.14em; text-transform:uppercase; color:#7f8db0; margin-top:-2px}
+  .brand-logo{flex:0 0 auto; display:block; border-radius:7px; box-sizing:border-box}
+  .topbar .brand-logo{height:40px; width:auto; background:#fff; padding:6px 10px; box-shadow:0 1px 2px rgba(0,0,0,.20)}
+  .login-card .brand-logo{height:40px; width:auto}
+
+  .topbar .spacer{flex:1}
+  .env-pill{
+    font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase;
+    padding:4px 9px; border-radius:999px; background:rgba(255,255,255,.08); color:#9fb0d4;
+    border:1px solid rgba(255,255,255,.10);
+  }
+  .env-pill.demo{background:var(--warn-wash); color:var(--warn); border-color:transparent}
+
+  .tbtn{
+    display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 13px;
+    border-radius:9px; border:1px solid rgba(255,255,255,.14);
+    background:rgba(255,255,255,.06); color:#e7ecf6; font-weight:600; font-size:13px;
+    transition:background .14s, border-color .14s, transform .06s;
+  }
+  .tbtn:hover{background:rgba(255,255,255,.13)}
+  .period-select{height:34px; background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.18);
+    border-radius:9px; padding:0 30px 0 11px; font-family:var(--font-ui); font-size:13px; font-weight:600; cursor:pointer; outline:none;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>");
+    background-repeat:no-repeat; background-position:right 9px center}
+  .period-select:hover{background-color:rgba(255,255,255,.16)}
+  .period-select option{color:#1f2937; background:#fff}
+  .search-box{position:relative; display:flex; align-items:center}
+  .search-box>svg{position:absolute; left:10px; width:15px; height:15px; color:rgba(255,255,255,.55); pointer-events:none}
+  .search-input{height:34px; width:210px; background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.18);
+    border-radius:9px; padding:0 28px 0 31px; font-family:var(--font-ui); font-size:13px; outline:none}
+  .search-input::placeholder{color:rgba(255,255,255,.55)}
+  .search-input:focus{border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.16)}
+  .search-clear{position:absolute; right:7px; width:18px; height:18px; border:0; border-radius:50%; background:rgba(255,255,255,.18);
+    color:#fff; cursor:pointer; font-size:13px; line-height:1; display:none; align-items:center; justify-content:center; padding:0}
+  .search-clear.show{display:flex}
+  .search-clear:hover{background:rgba(255,255,255,.3)}
+  .tbtn:active{transform:translateY(1px)}
+  .tbtn svg{width:16px; height:16px}
+  .tbtn.spin svg{animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .usermenu{position:relative}
+  .avatar{
+    width:36px; height:36px; border-radius:50%; border:none; color:#fff; font-weight:700; font-family:var(--font-ui);
+    display:grid; place-items:center; font-size:13px;
+    background:linear-gradient(135deg,#3a7bd5,#0ea5a4);
+  }
+  .menu{
+    position:absolute; right:0; top:46px; width:228px; background:#fff; color:var(--text);
+    border-radius:var(--r-md); box-shadow:var(--shadow-lg); border:1px solid var(--line);
+    padding:6px; display:none; z-index:40;
+  }
+  .menu.open{display:block}
+  .menu .who{padding:10px 11px 11px}
+  .menu .who b{display:block; font-family:var(--font-ui); font-size:14px}
+  .menu .who span{color:var(--muted); font-size:12px}
+  .menu hr{border:none; border-top:1px solid var(--line); margin:4px 0}
+  .menu button{
+    width:100%; text-align:left; border:none; background:none; padding:9px 11px; border-radius:8px;
+    font-size:13.5px; color:var(--text); display:flex; align-items:center; gap:9px;
+  }
+  .menu button:hover{background:var(--surface)}
+  .menu button svg{width:15px;height:15px;color:var(--muted)}
+  .menu .role-tag{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-deep);background:var(--accent-wash);padding:2px 6px;border-radius:5px;margin-left:6px}
+
+  /* ---------- Board ---------- */
+  .board-wrap{min-height:0; display:flex; flex-direction:column}
+  .board-meta{
+    display:flex; align-items:center; gap:14px; padding:11px 20px; background:#fff;
+    border-bottom:1px solid var(--line); font-size:13px;
+  }
+  .board-meta .stat{color:var(--muted)}
+  .board-meta .stat b{color:var(--text); font-family:var(--font-ui); font-weight:700}
+  .board-meta .sync{margin-left:auto; color:var(--muted-2); font-size:12px; display:flex; align-items:center; gap:6px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--good)}
+  .dot.stale{background:#d97706}
+
+  .board{
+    flex:1; min-height:0; display:flex; gap:14px; overflow-x:auto; overflow-y:hidden;
+    padding:16px 20px 22px; scroll-behavior:smooth;
+  }
+  .col{
+    flex:0 0 var(--col-w); width:var(--col-w); display:flex; flex-direction:column; min-height:0;
+    background:#e7ebf3; border-radius:var(--r-lg); border:1px solid #dde2ec;
+  }
+  .col-head{
+    display:flex; align-items:center; gap:9px; padding:13px 14px 11px;
+  }
+  .col-head .bar{width:4px; height:18px; border-radius:3px; background:var(--accent)}
+  .col-head h3{margin:0; font-family:var(--font-ui); font-size:13.5px; font-weight:700; letter-spacing:-.01em; flex:1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+  .col-head .count{font-size:12px; font-weight:700; color:var(--muted); background:#fff; border:1px solid var(--line);
+    min-width:24px; text-align:center; padding:2px 7px; border-radius:999px}
+  .col-sum{padding:0 14px 9px; font-size:11.5px; color:var(--muted); font-variant-numeric:tabular-nums; display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-start; gap:5px 6px}
+  .sortbtn{font-family:var(--font-ui); font-size:11px; font-weight:700; color:var(--muted); background:#fff; border:1px solid var(--line); border-radius:6px; padding:1px 7px; cursor:pointer; line-height:1.6; flex:none}
+  .sortbtn:hover{border-color:var(--accent); color:var(--accent-deep)}
+  .sortbtn.active{color:#fff; background:var(--accent); border-color:var(--accent)}
+  .sortgrp{display:inline-flex; gap:4px; flex:none; margin-left:auto}
+  .prob{font-size:11px; font-weight:700; color:var(--accent-deep); background:var(--accent-wash); border-radius:5px; padding:1px 6px; margin-left:7px; vertical-align:middle}
+  .company{font-size:11.5px; color:var(--accent-deep); font-weight:600; margin:-2px 0 7px}
+  .opp-company{font-size:13px; color:var(--accent-deep); font-weight:600; margin-top:5px}
+  .stages-menu{width:252px; max-height:64vh; overflow:auto}
+  .stages-menu .who span{display:block}
+  .stage-checks{max-height:42vh; overflow:auto; padding:2px 0}
+  .stage-check{display:flex; align-items:center; gap:8px; padding:6px 12px; font-size:12.5px; cursor:pointer}
+  .stage-check:hover{background:var(--surface)}
+  .stage-check input{width:15px; height:15px; flex:none; accent-color:var(--accent)}
+  .stage-actions{display:flex; gap:8px; padding:8px 11px}
+  .col-body{
+    flex:1; min-height:0; overflow-y:auto; padding:2px 10px 10px; display:flex; flex-direction:column; gap:10px;
+    scrollbar-width:thin;
+  }
+  .col-body::-webkit-scrollbar{width:9px}
+  .col-body::-webkit-scrollbar-thumb{background:#c7cedd; border-radius:9px; border:2px solid transparent; background-clip:padding-box}
+  .col.drag-over{background:var(--accent-wash); border-color:var(--accent)}
+  .col.drag-over .col-body{outline:2px dashed var(--accent); outline-offset:-4px; border-radius:12px}
+
+  /* ---------- Card ---------- */
+  .card{
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r-md);
+    padding:12px 13px 11px; box-shadow:var(--shadow-sm); cursor:grab; position:relative;
+    transition:box-shadow .14s, transform .08s, border-color .14s; will-change:transform;
+  }
+  .card:hover{box-shadow:var(--shadow-md); border-color:var(--line-strong)}
+  .card:active{cursor:grabbing}
+  .card.dragging{opacity:.45; transform:scale(.98)}
+  .card .title{font-family:var(--font-ui); font-weight:700; font-size:13.5px; line-height:1.32; letter-spacing:-.01em; margin:0 0 5px; color:var(--text)}
+  .card .desc{color:var(--muted); font-size:12px; line-height:1.4; margin:0 0 10px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+  .card .row{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px}
+  .rev{font-family:var(--font-ui); font-weight:800; font-size:15px; color:var(--text); letter-spacing:-.02em}
+  .rev .mrr{display:block; font-family:var(--font-body); font-weight:600; font-size:10.5px; color:var(--accent-deep); letter-spacing:0; margin-top:1px}
+  .datechip{
+    display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; color:var(--muted);
+    background:var(--surface); border:1px solid var(--line); padding:4px 8px; border-radius:7px; cursor:pointer;
+    transition:border-color .12s, color .12s;
+  }
+  .datechip:hover{border-color:var(--accent); color:var(--accent-deep)}
+  .datechip svg{width:13px;height:13px}
+  .datechip.overdue{color:var(--danger); background:#fef2f2; border-color:#fecaca}
+  .datechip input{border:none; background:none; font:inherit; color:inherit; width:108px; outline:none}
+
+  .activity{
+    background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:7px 9px; margin-top:2px;
+  }
+  .activity .meta{font-size:10.5px; color:var(--muted-2); margin-bottom:2px; display:flex; gap:6px; align-items:center}
+  .activity .meta b{color:var(--muted); font-weight:600}
+  .activity .body{font-size:12px; color:var(--text); line-height:1.4;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .activity.empty{color:var(--muted-2); font-style:italic; text-align:center; font-size:11.5px; padding:8px}
+
+  .card .foot{display:flex; align-items:center; gap:10px; margin-top:10px; padding-top:9px; border-top:1px solid var(--line)}
+  .qlink{display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; color:var(--accent-deep); text-decoration:none}
+  .qlink:hover{text-decoration:underline}
+  .qlink svg{width:12px;height:12px}
+  .card .owner{margin-left:auto; font-size:11px; color:var(--muted-2); display:flex; align-items:center; gap:5px}
+  .mini-av{width:18px;height:18px;border-radius:50%;font-size:9px;font-weight:700;color:#fff;display:grid;place-items:center;background:linear-gradient(135deg,#3a7bd5,#0ea5a4);font-family:var(--font-ui)}
+
+  .sentinel{height:1px}
+  .col-loading{padding:10px; text-align:center; color:var(--muted-2); font-size:12px}
+
+  /* ---------- Login ---------- */
+  #login{
+    position:fixed; inset:0; display:grid; place-items:center; padding:24px;
+    background:
+      radial-gradient(1100px 600px at 15% -10%, rgba(14,165,164,.16), transparent 60%),
+      radial-gradient(900px 600px at 110% 110%, rgba(58,123,213,.18), transparent 55%),
+      var(--ink);
+    z-index:50;
+  }
+  .login-card{
+    width:100%; max-width:392px; background:#fff; border-radius:20px; box-shadow:var(--shadow-lg);
+    padding:34px 32px; text-align:center;
+  }
+  .login-card .brand{justify-content:center; color:var(--ink); margin-bottom:6px}
+  .login-card h1{font-family:var(--font-ui); font-size:21px; font-weight:800; letter-spacing:-.02em; margin:14px 0 6px}
+  .login-card p{color:var(--muted); margin:0 0 22px; font-size:13.5px}
+  .btn-primary{
+    width:100%; height:46px; border:none; border-radius:11px; font-family:var(--font-ui); font-weight:700; font-size:14.5px;
+    color:#fff; background:linear-gradient(135deg, var(--accent) 0%, var(--accent-deep) 100%);
+    display:inline-flex; align-items:center; justify-content:center; gap:9px; box-shadow:0 6px 16px rgba(14,165,164,.32);
+    transition:filter .14s, transform .06s;
+  }
+  .btn-primary:hover{filter:brightness(1.05)}
+  .btn-primary:active{transform:translateY(1px)}
+  .btn-primary svg{width:18px;height:18px}
+  .login-note{margin-top:18px; font-size:11.5px; color:var(--muted-2); line-height:1.5}
+  .login-divider{display:flex;align-items:center;gap:10px;color:var(--muted-2);font-size:11px;margin:20px 0 14px;text-transform:uppercase;letter-spacing:.08em}
+  .login-divider::before,.login-divider::after{content:"";flex:1;border-top:1px solid var(--line)}
+  .btn-ghost{width:100%;height:42px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--text);font-weight:600;font-size:13.5px}
+  .btn-ghost:hover{background:var(--surface)}
+  .login-input{width:100%; height:46px; border:1px solid var(--line); border-radius:11px; padding:0 14px; margin-bottom:12px;
+    font-family:var(--font-ui); font-size:14.5px; color:var(--text); background:#fff; outline:none; box-sizing:border-box}
+  .login-input:focus{border-color:var(--accent); box-shadow:0 0 0 3px rgba(14,165,164,.15)}
+  #pickWrap .btn-primary{margin-top:0}
+
+  /* ---------- Modal ---------- */
+  .scrim{position:fixed; inset:0; background:rgba(13,20,36,.5); backdrop-filter:blur(2px); z-index:60;
+    display:none; align-items:flex-start; justify-content:center; padding:40px 20px; overflow-y:auto}
+  .scrim.open{display:flex}
+  .modal{
+    width:100%; max-width:560px; background:#fff; border-radius:18px; box-shadow:var(--shadow-lg);
+    animation:rise .18s ease; overflow:hidden;
+  }
+  .modal.wide{max-width:620px}
+  @keyframes rise{from{opacity:0; transform:translateY(10px) scale(.99)} to{opacity:1; transform:none}}
+  .modal-head{display:flex; align-items:flex-start; gap:12px; padding:20px 22px 14px; border-bottom:1px solid var(--line)}
+  .modal-head .stage-tag{font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--accent-deep);background:var(--accent-wash);padding:3px 9px;border-radius:6px;display:inline-block;margin-bottom:7px}
+  .modal-head h2{font-family:var(--font-ui); font-size:18px; font-weight:800; letter-spacing:-.02em; margin:0; line-height:1.3}
+  .icon-btn{margin-left:auto; flex:0 0 auto; width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--muted);display:grid;place-items:center}
+  .icon-btn:hover{background:var(--surface); color:var(--text)}
+  .icon-btn svg{width:16px;height:16px}
+  .modal-body{padding:18px 22px; max-height:60vh; overflow-y:auto}
+  .field{margin-bottom:16px}
+  .field label{display:block; font-size:11.5px; font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); margin-bottom:6px}
+  .field .ro{font-size:14px; color:var(--text)}
+  .inp, textarea.inp{
+    width:100%; border:1px solid var(--line-strong); border-radius:10px; padding:10px 12px; font:inherit; color:var(--text);
+    background:#fff; transition:border-color .12s, box-shadow .12s;
+  }
+  .inp:focus, textarea.inp:focus{outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-wash)}
+  textarea.inp{resize:vertical; min-height:78px; line-height:1.5}
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .metric{background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:12px 13px}
+  .metric .k{font-size:11px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em}
+  .metric .v{font-family:var(--font-ui); font-weight:800; font-size:19px; letter-spacing:-.02em; margin-top:3px}
+  .metric .v.teal{color:var(--accent-deep)}
+  .links-row{display:flex; gap:10px; flex-wrap:wrap; margin-top:2px}
+  .ext-link{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--accent-deep);text-decoration:none;border:1px solid var(--line);padding:8px 12px;border-radius:9px;background:#fff}
+  .ext-link:hover{border-color:var(--accent);background:var(--accent-wash)}
+  .ext-link svg{width:14px;height:14px}
+  .create-ticket{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:#fff;text-decoration:none;
+    border:1px solid var(--accent);padding:8px 12px;border-radius:9px;background:var(--accent)}
+  .create-ticket:hover{background:var(--accent-deep);border-color:var(--accent-deep)}
+  .create-ticket svg{width:14px;height:14px}
+  .assoc-ticket{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--accent-deep);text-decoration:none;
+    border:1px solid var(--accent);padding:8px 12px;border-radius:9px;background:transparent}
+  .assoc-ticket:hover{background:var(--accent-wash)}
+  .assoc-ticket svg{width:14px;height:14px}
+  .assoc-panel{margin-top:10px;padding:11px 12px;background:var(--surface);border:1px solid var(--line);border-radius:9px}
+  .assoc-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .assoc-panel #assocSearch{margin:0 0 8px}
+  .assoc-row .inp{flex:1;min-width:200px;margin:0}
+  .assoc-note{font-size:12px;margin-top:7px;color:var(--muted-2)}
+  .tkt{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700}
+  .tkt svg{width:12px;height:12px}
+  .tkt.has{color:var(--accent-deep)}
+  .tkt.none{color:var(--muted-2);opacity:.45}
+  .ticket-copy{display:flex;align-items:center;gap:10px;margin-top:12px;padding:9px 12px;background:var(--surface);border:1px solid var(--line);border-radius:9px;flex-wrap:wrap}
+  .tc-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+  .tc-nums{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:var(--text);user-select:all;background:#fff;padding:3px 8px;border-radius:6px;border:1px solid var(--line)}
+  .tc-copy{font-family:var(--font-ui);font-size:12px;font-weight:600;color:var(--accent-deep);background:#fff;border:1px solid var(--line);border-radius:7px;padding:4px 11px;cursor:pointer;margin-left:auto}
+  .tc-copy:hover{border-color:var(--accent);background:var(--accent-wash)}
+
+  .section-label{font-family:var(--font-ui); font-size:13px; font-weight:700; margin:20px 0 10px; display:flex; align-items:center; gap:8px}
+  .section-label .pill{font-family:var(--font-body);font-size:10.5px;font-weight:700;color:var(--muted);background:var(--surface);border:1px solid var(--line);padding:1px 7px;border-radius:999px}
+  .feed{display:flex; flex-direction:column; gap:9px; margin-bottom:6px}
+  .feed .activity{background:#fff; border:1px solid var(--line)}
+  .feed .activity .body{-webkit-line-clamp:unset; display:block}
+  .add-note{display:flex; gap:9px; align-items:flex-end; margin-top:10px}
+  .add-note textarea{flex:1; min-height:44px}
+
+  .modal-foot{display:flex; align-items:center; gap:10px; padding:15px 22px; border-top:1px solid var(--line); background:var(--surface)}
+  .modal-foot .left{font-size:12px; color:var(--muted)}
+  .modal-foot .grow{flex:1}
+  .btn{height:40px; padding:0 16px; border-radius:10px; font-family:var(--font-ui); font-weight:700; font-size:13.5px; border:1px solid transparent; display:inline-flex;align-items:center;gap:7px}
+  .btn.solid{background:var(--accent); color:#fff; box-shadow:0 4px 12px rgba(14,165,164,.28)}
+  .btn.solid:hover{background:var(--accent-deep)}
+  .btn.solid:disabled{opacity:.5; box-shadow:none; cursor:default}
+  .btn.line{background:#fff; border-color:var(--line-strong); color:var(--text)}
+  .btn.line:hover{background:var(--surface)}
+  .btn.small{height:36px;padding:0 13px;font-size:12.5px}
+  .btn svg{width:15px;height:15px}
+
+  /* settings */
+  .set-row{display:flex; gap:10px; align-items:center; padding:12px 0; border-bottom:1px solid var(--line)}
+  .set-row:last-child{border-bottom:none}
+  .set-row .k{flex:0 0 150px; font-weight:600; font-size:13px}
+  .set-row .k small{display:block; font-weight:400; color:var(--muted-2); font-size:11px}
+  .admins{display:flex; flex-wrap:wrap; gap:7px; margin-top:8px}
+  .admin-chip{display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 6px 5px 11px;font-size:12.5px}
+  .admin-chip button{border:none;background:none;color:var(--muted-2);width:18px;height:18px;border-radius:50%;display:grid;place-items:center}
+  .admin-chip button:hover{background:#fee2e2;color:var(--danger)}
+  .keyvault-note{display:flex;gap:9px;background:var(--accent-wash);border:1px solid #bfe9e6;border-radius:11px;padding:11px 13px;font-size:12.5px;color:#0a6b6a;margin-top:6px;line-height:1.5}
+  .keyvault-note svg{width:17px;height:17px;flex:0 0 auto;margin-top:1px}
+
+  /* toast */
+  .toasts{position:fixed; bottom:22px; left:50%; transform:translateX(-50%); z-index:90; display:flex; flex-direction:column; gap:9px; align-items:center}
+  .toast{
+    background:var(--ink); color:#fff; padding:11px 16px; border-radius:11px; box-shadow:var(--shadow-lg);
+    font-size:13px; font-weight:500; display:flex; align-items:center; gap:9px; animation:toastin .22s ease;
+    max-width:90vw;
+  }
+  .toast svg{width:16px;height:16px;flex:0 0 auto}
+  .toast.ok svg{color:#4ade80} .toast.err{background:#7f1d1d} .toast.err svg{color:#fca5a5}
+  @keyframes toastin{from{opacity:0; transform:translateY(8px)} to{opacity:1}}
+
+  /* skeleton */
+  .sk{background:linear-gradient(90deg,#e9edf4 25%,#f2f5fa 37%,#e9edf4 63%); background-size:400% 100%; animation:shimmer 1.3s infinite; border-radius:7px}
+  @keyframes shimmer{0%{background-position:100% 0}100%{background-position:-100% 0}}
+
+  @media (max-width:720px){
+    :root{--col-w:280px}
+    .board-meta .stat:nth-child(n+3){display:none}
+    .grid2{grid-template-columns:1fr}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation-duration:.001ms !important; transition-duration:.001ms !important; scroll-behavior:auto !important}
+  }
+</style>
+</head>
+<body>
+
+<!-- ===================== LOGIN ===================== -->
+<div id="login">
+  <div class="login-card">
+    <div class="brand"><img class="brand-logo" src="data:image/png;base64,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" alt="HD IT" /><div>Pipeline<small>Autotask Sales Board · <span class="app-ver"></span></small></div></div>
+    <h1>Sign in to your pipeline</h1>
+    <p>Enter the team password, then choose your name. Every change you make is written to Autotask as you.</p>
+    <input type="password" id="appPassword" class="login-input" placeholder="Team password" autocomplete="current-password" />
+    <button class="btn-primary" id="pwContinue">Continue</button>
+    <div id="pickWrap" style="display:none; margin-top:12px">
+      <select id="resourceSelect" class="login-input"></select>
+      <input type="text" id="otpInput" class="login-input" style="display:none" placeholder="Authenticator code (LastPass OTP)" inputmode="numeric" autocomplete="one-time-code" maxlength="6" />
+      <button class="btn-primary" id="enterBtn">Enter pipeline</button>
+    </div>
+    <div class="login-divider">or</div>
+    <button class="btn-ghost" id="demoLogin">Explore the demo board</button>
+    <div class="login-note" id="loginNote"></div>
+  </div>
+</div>
+
+<!-- ===================== APP ===================== -->
+<div id="app">
+  <header class="topbar">
+    <div class="brand"><img class="brand-logo" src="data:image/png;base64,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" alt="HD IT" /><div>Pipeline<small>Autotask Sales Board · <span class="app-ver"></span></small></div></div>
+    <span class="env-pill" id="envPill"></span>
+    <div class="spacer"></div>
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="searchInput" class="search-input" type="text" placeholder="Search by title…" autocomplete="off" spellcheck="false" />
+      <button id="searchClear" class="search-clear" title="Clear search" aria-label="Clear search">&times;</button>
+    </div>
+    <select id="ownerSelect" class="period-select" title="Filter by opportunity owner">
+      <option value="all">All owners</option>
+    </select>
+    <select id="clientSelect" class="period-select" title="Filter by client">
+      <option value="all">All clients</option>
+    </select>
+    <select id="periodSelect" class="period-select" title="Filter by projected close date">
+      <optgroup label="By week">
+        <option value="lastweek">Last Week</option>
+        <option value="thisweek">Current Week</option>
+        <option value="nextweek">Next Week</option>
+      </optgroup>
+      <optgroup label="By month">
+        <option value="older">Older than Last Month</option>
+        <option value="last">Last Month</option>
+        <option value="current" selected>Current Month</option>
+        <option value="next">Next Month</option>
+        <option value="further">Further than Next Month</option>
+      </optgroup>
+    </select>
+    <button class="tbtn" id="refreshBtn" title="Pull the latest from Autotask">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      Refresh
+    </button>
+    <div class="usermenu">
+      <button class="tbtn" id="helpBtn" title="Help & documentation">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Help
+      </button>
+      <div class="menu help-menu" id="helpMenu">
+        <button id="guideBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          User Guide
+        </button>
+        <button id="changelogBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+          What's new
+        </button>
+      </div>
+    </div>
+    <div class="usermenu">
+      <button class="tbtn" id="stagesBtn" title="Show or hide stages">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+        Stages
+      </button>
+      <div class="menu stages-menu" id="stagesMenu"></div>
+    </div>
+    <div class="usermenu">
+      <button class="avatar" id="avatarBtn">··</button>
+      <div class="menu" id="userMenu">
+        <div class="who"><b id="meName">—</b><span id="meEmail">—</span></div>
+        <hr/>
+        <button id="settingsBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Settings<span class="role-tag" id="roleTag" style="display:none">Admin</span>
+        </button>
+        <button id="signOutBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+          Sign out
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <div class="board-wrap">
+    <div class="board-meta">
+      <span class="stat"><b id="totalOpps" class="num">—</b> active opportunities</span>
+      <span class="stat">Weighted pipeline <b id="totalRev" class="num">—</b></span>
+      <span class="sync" id="syncStatus"><span class="dot"></span> <span id="syncText">Synced</span></span>
+    </div>
+    <div class="board" id="board"></div>
+  </div>
+</div>
+
+<!-- ===================== OPPORTUNITY MODAL ===================== -->
+<div class="scrim" id="oppScrim">
+  <div class="modal wide" id="oppModal" role="dialog" aria-modal="true"></div>
+</div>
+
+<!-- ===================== SETTINGS MODAL ===================== -->
+<div class="scrim" id="setScrim">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div><span class="stage-tag">Administrator</span><h2>Settings</h2></div>
+      <button class="icon-btn" data-close-set><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="section-label">Autotask API connection</div>
+      <div class="field">
+        <label>API zone base URL</label>
+        <input class="inp" id="setBaseUrl" placeholder="https://webservicesNN.autotask.net/atservicesrest" />
+      </div>
+      <div class="field">
+        <label>API integration code</label>
+        <input class="inp" id="setApiKey" placeholder="Stored in Azure Key Vault — leave blank to keep current" />
+      </div>
+      <div class="keyvault-note">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <span>Credentials are written to <b>Azure Key Vault</b>, never stored in the browser. The API key field shows blank by design — submitting it replaces the secret; leaving it blank keeps the existing one.</span>
+      </div>
+
+      <div class="section-label" style="margin-top:24px">Administrators <span class="pill">role-based access</span></div>
+      <p style="color:var(--muted); font-size:12.5px; margin:0 0 4px">Anyone on this list sees Settings. Matched by Entra ID / Autotask email. Editable here or directly in Key Vault without redeploying.</p>
+      <div class="admins" id="adminList"></div>
+      <div style="display:flex; gap:9px; margin-top:12px">
+        <input class="inp" id="newAdmin" placeholder="name@company.com" />
+        <button class="btn line small" id="addAdmin">Add</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="left">Changes apply on save.</span>
+      <div class="grow"></div>
+      <button class="btn line" data-close-set>Cancel</button>
+      <button class="btn solid" id="saveSettings">Save settings</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== FIRST-RUN PASSWORD MODAL ===================== -->
+<div class="scrim" id="pwScrim">
+  <div class="modal" role="dialog" aria-modal="true" style="max-width:440px">
+    <div class="modal-head"><div><span class="stage-tag">First sign-in</span><h2>Set a new admin password</h2></div></div>
+    <div class="modal-body">
+      <p style="color:var(--muted);margin-top:0">You signed in with the temporary administrator credential. Choose a new password to continue.</p>
+      <div class="field"><label>New password</label><input class="inp" id="pw1" type="password" autocomplete="new-password"/></div>
+      <div class="field"><label>Confirm password</label><input class="inp" id="pw2" type="password" autocomplete="new-password"/></div>
+    </div>
+    <div class="modal-foot"><div class="grow"></div><button class="btn solid" id="savePw">Set password &amp; continue</button></div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+
+<script>
+/* =========================================================================
+   CONFIG  — flip these two lines to go live.
+   ========================================================================= */
+const CONFIG = {
+  APP_VERSION: "1.12.0",                                           // shown in the UI; bump on each release (see CHANGELOG.md)
+  DEMO_MODE: false,                                               // true = sample data, no backend
+  API_BASE: "https://func-hdit-pipeline-prod-aue.azurewebsites.net/api", // new CAF Function App (Australia East)
+  AUTOTASK_UI_BASE: "https://ww29.autotask.net",                  // Autotask web zone, for "Open in Autotask"
+  QUOTE_BASE: "https://redirect.dattocommerce.com/v1/Autotask/tenants/700659/quotes", // Datto Commerce quote links
+  TICKET_BASE: "https://ww29.autotask.net/Mvc/ServiceDesk/TicketDetail.mvc", // linked-ticket links
+  TICKET_NEW_BASE: "https://ww29.autotask.net/Mvc/ServiceDesk/TicketNew.mvc/Create", // create-linked-ticket
+  TICKET_NEW_CATEGORY: "108" // default ticket category id used by "create linked ticket"
+};
+// Stamp the version into every .app-ver element (brand subtitles on login + board).
+document.querySelectorAll(".app-ver").forEach(el => el.textContent = "v" + CONFIG.APP_VERSION);
+
+/* =========================================================================
+   SMALL HELPERS
+   ========================================================================= */
+const $ = s => document.querySelector(s);
+const el = (t, c, h) => { const n = document.createElement(t); if(c) n.className=c; if(h!=null) n.innerHTML=h; return n; };
+const fmtMoney = n => n==null ? "—" : new Intl.NumberFormat("en-AU",{style:"currency",currency:"AUD",maximumFractionDigits:0}).format(n);
+const fmtMoneyFull = n => n==null ? "—" : new Intl.NumberFormat("en-AU",{style:"currency",currency:"AUD"}).format(n);
+const initials = name => String(name==null?"?":name).split(/\s+/).map(w=>w[0]).slice(0,2).join("").toUpperCase();
+const esc = s => (s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+// --- stage ordering (by the "Stage N[a-z]:" number in the name), not by raw id ---
+function stageOrderKey(name){
+  const m = /stage\s+(\d+)\s*([a-z]?)/i.exec(name||"");
+  return m ? [parseInt(m[1],10), (m[2]||"").toLowerCase()] : [9999, (name||"").toLowerCase()];
+}
+function byStageOrder(a,b){
+  const ka=stageOrderKey(a.name), kb=stageOrderKey(b.name);
+  if(ka[0]!==kb[0]) return ka[0]-kb[0];
+  return ka[1]<kb[1]?-1 : ka[1]>kb[1]?1 : 0;
+}
+// --- show/hide filter, persisted per browser ---
+const HIDDEN_KEY = "pipeline_hidden_stages";
+function loadHidden(){ try{ return new Set((JSON.parse(localStorage.getItem(HIDDEN_KEY)||"[]")||[]).map(String)); }catch(_){ return new Set(); } }
+function saveHidden(){ try{ localStorage.setItem(HIDDEN_KEY, JSON.stringify([...State.hiddenStages])); }catch(_){} }
+function isHidden(stageId){ return State.hiddenStages.has(String(stageId)); }
+// --- period filter on projected close date (relative to the current month) ---
+function weekStart(dt){ const d=new Date(dt); const dow=(d.getDay()+6)%7; d.setDate(d.getDate()-dow); d.setHours(0,0,0,0); return d; } // Monday start
+function periodMatch(closeDate){
+  const p = State.period || "current";
+  if(!closeDate) return true;                 // undated opportunities always show
+  const d = new Date(String(closeDate).slice(0,10) + "T00:00:00");
+  if(isNaN(d)) return true;
+  const now = new Date();
+  if(p==="thisweek" || p==="lastweek" || p==="nextweek"){
+    const wd = Math.round((weekStart(d) - weekStart(now)) / 604800000);
+    return p==="thisweek" ? wd===0 : p==="lastweek" ? wd===-1 : wd===1;
+  }
+  const diff = (d.getFullYear()*12 + d.getMonth()) - (now.getFullYear()*12 + now.getMonth());
+  switch(p){
+    case "current": return diff===0;
+    case "last":    return diff===-1;
+    case "next":    return diff===1;
+    case "older":   return diff < -1;
+    case "further": return diff > 1;
+    default:        return true;
+  }
+}
+function ownerClientMatch(o){
+  return (State.ownerFilter==="all" || !State.ownerFilter || o.owner===State.ownerFilter)
+      && (State.clientFilter==="all" || !State.clientFilter || o.company===State.clientFilter);
+}
+function searchMatch(o){
+  if(!State.search) return true;
+  return (o.title||"").toLowerCase().includes(State.search);
+}
+function columnIds(stageId){
+  return (State.byStage[stageId]||[]).filter(id => {
+    const o = State.opps[id];
+    return periodMatch(o.closeDate) && ownerClientMatch(o) && searchMatch(o);
+  });
+}
+function stageSums(ids){
+  let oneOff=0, mrr=0;
+  ids.forEach(id=>{ const o=State.opps[id]; oneOff+=o.oneOff||0; mrr+=o.mrr||0; });
+  return { oneOff, mrr };
+}
+function stageSumLabel(ids){
+  const s = stageSums(ids);
+  return fmtMoney(s.oneOff) + (s.mrr ? ` + ${fmtMoney(s.mrr)}/mo` : "") + " in stage";
+}
+function fmtDate(iso){ if(!iso) return "No date"; const d=new Date(iso);
+  return d.toLocaleDateString("en-AU",{day:"numeric",month:"short",year:"numeric"}); }
+function fmtWhen(iso){ const d=new Date(iso), now=new Date(), s=(now-d)/1000;
+  if(s<60) return "just now"; if(s<3600) return Math.floor(s/60)+"m ago"; if(s<86400) return Math.floor(s/3600)+"h ago";
+  if(s<604800) return Math.floor(s/86400)+"d ago";
+  return d.toLocaleDateString("en-AU",{day:"numeric",month:"short"}); }
+function isOverdue(iso){ if(!iso) return false; const d=new Date(iso); d.setHours(23,59,59); return d < new Date(); }
+
+function toast(msg, kind="ok"){
+  const icons = {
+    ok:'<path d="M20 6 9 17l-5-5"/>', err:'<path d="M18 6 6 18M6 6l12 12"/>',
+    info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>'
+  };
+  const t = el("div","toast "+kind,
+    `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${icons[kind]||icons.ok}</svg><span>${esc(msg)}</span>`);
+  $("#toasts").appendChild(t);
+  setTimeout(()=>{ t.style.opacity="0"; t.style.transition="opacity .25s"; setTimeout(()=>t.remove(),260); }, 2600);
+}
+
+/* =========================================================================
+   APP STATE
+   ========================================================================= */
+const State = {
+  me: null,                 // {name,email,role,autotaskId}
+  stages: [],               // [{id,name}] ascending, from Autotask
+  opps: {},                 // id -> opportunity
+  byStage: {},              // stageId -> [oppId...]
+  rendered: {},             // stageId -> count rendered (infinite scroll)
+  admins: [],
+  settings: { baseUrl:"", apiKeySet:false },
+  dirty: new Set(),         // oppIds with unsaved edits in the open modal only
+  lastSync: null,
+  hiddenStages: loadHidden(),  // stage ids hidden by the filter (persisted per browser)
+  stageSort: {},               // stageId -> {field:"oneOff"|"prob", dir:"asc"|"desc"}
+  period: "current",           // projected-close-date filter
+  ownerFilter: "all",          // opportunity-owner filter
+  clientFilter: "all",         // client/company filter
+  search: "",                  // title search text (lowercased)
+};
+const PAGE = 20;
+
+/* =========================================================================
+   API LAYER  — talks to the Azure Function in live mode,
+   serves rich mock data in demo mode so every feature is testable.
+   ========================================================================= */
+const Api = (() => {
+  let token = null;
+  const setToken = t => token = t;
+
+  async function call(path, opts={}){
+    const res = await fetch(CONFIG.API_BASE + path, {
+      ...opts,
+      headers: { "Content-Type":"application/json",
+                 ...(token?{Authorization:"Bearer "+token}:{}), ...(opts.headers||{}) }
+    });
+    if(res.status===401){
+      let msg = "Your session expired. Please sign in again.";
+      try{ const j = await res.clone().json(); if(j && j.message) msg = j.message; }catch(_){}
+      try{ localStorage.removeItem("pipeline_session"); }catch(_){}
+      throw new Error(msg);
+    }
+    if(!res.ok){ const e = await res.json().catch(()=>({})); throw new Error(e.message||("Autotask request failed ("+res.status+")")); }
+    return res.status===204 ? null : res.json();
+  }
+
+  /* ---- live implementations (single Azure Function, routed by path) ---- */
+  const live = {
+    resources: (password)         => call("/resources",{method:"POST",body:JSON.stringify({password})}),
+    login:     (password,resourceId,name,otp) => call("/login",{method:"POST",body:JSON.stringify({password,resourceId,name,otp})}),
+    me:        ()                 => call("/me"),
+    stages:    ()                 => call("/stages"),
+    opps:      ()                 => call("/opportunities"),
+    activities:(id)               => call(`/opportunities/${id}/activities`),
+    moveStage: (id,stageId)       => call(`/opportunities/${id}/stage`,{method:"PATCH",body:JSON.stringify({stageId})}),
+    patchOpp:  (id,changes)       => call(`/opportunities/${id}`,{method:"PATCH",body:JSON.stringify(changes)}),
+    addNote:   (id,text)          => call(`/opportunities/${id}/activities`,{method:"POST",body:JSON.stringify({text})}),
+    companyTickets:  (id)         => call(`/opportunities/${id}/company-tickets`),
+    associateTicket: (id,ticketId)=> call(`/opportunities/${id}/tickets`,{method:"POST",body:JSON.stringify({ticketId})}),
+    admins:    ()                 => call("/admins"),
+    saveSettings:(p)              => call("/settings",{method:"PUT",body:JSON.stringify(p)}),
+    saveAdmins:(list)             => call("/admins",{method:"PUT",body:JSON.stringify({admins:list})}),
+  };
+
+  return { setToken, live, isLive: ()=>!CONFIG.DEMO_MODE && !!CONFIG.API_BASE };
+})();
+
+/* =========================================================================
+   DEMO DATA  — ~100 opportunities so infinite scroll & totals are real.
+   ========================================================================= */
+const Demo = (() => {
+  const stageNames = ["Lead Identified","Qualifying","Discovery","Proposal Sent",
+                      "Negotiation","Verbal Commit","Contract Out","Awaiting PO",
+                      "Onboarding Scheduled","Closing"];          // 10 custom names
+  const stageIds   = [0,1,2,3,4,5,6,8,9,10];                      // note: 7 intentionally absent
+  const stages = stageIds.map((id,i)=>({id, name:stageNames[i]}));
+
+  const companies=["Northwind Traders","Contoso Group","Fabrikam Pty","Tailspin Toys","Adventure Works",
+    "Wide World Imports","Proseware Inc","Litware Solutions","Coho Vineyard","Margie's Travel",
+    "Alpine Ski House","Blue Yonder Airlines","City Power & Light","Graphic Design Inst","Humongous Insurance",
+    "Lucerne Publishing","Trey Research","VanArsdel Ltd","Wingtip Toys","School of Fine Art"];
+  const products=["Managed Detection & Response","Microsoft 365 E5 migration","SOC-as-a-Service",
+    "Cloud backup uplift","SD-WAN refresh","Endpoint hardening project","vCIO retainer","Azure landing zone",
+    "Email security gateway","Identity governance rollout","Server fleet replacement","Co-managed IT contract"];
+  const owners=["Sarah Chen","Marcus Webb","Priya Nair","Tom Bradshaw","Elena Rossi","James Okafor"];
+  const noteTemplates=[
+    "Followed up with the client — awaiting their response on pricing.",
+    "Meeting booked for next Tuesday to walk through the proposal.",
+    "Champion is on board, now needs sign-off from their CFO.",
+    "Sent revised quote with the 3-year option they asked for.",
+    "Left a voicemail and emailed; will chase again Thursday.",
+    "They've confirmed budget for this quarter. Looking strong.",
+    "Procurement has the contract for final review.",
+    "Technical scoping call went well — no blockers raised.",
+  ];
+  const rnd = a => a[Math.floor(Math.random()*a.length)];
+  const id8 = () => Math.floor(10000000+Math.random()*89999999);
+
+  function build(){
+    const opps={};
+    let oid=29400000;
+    for(let i=0;i<100;i++){
+      const stage = rnd(stages);
+      const company = rnd(companies);
+      const product = rnd(products);
+      const owner = rnd(owners);
+      const oneOff = Math.round((5+Math.random()*120))*1000;
+      const mrr = Math.random()<.6 ? Math.round((1+Math.random()*9))*500 : 0;
+      const close = new Date(); close.setDate(close.getDate() + Math.round(-25 + Math.random()*160));
+      const nActs = Math.floor(Math.random()*6); // 0..5
+      const acts=[];
+      for(let a=0;a<nActs;a++){
+        const when=new Date(); when.setHours(when.getHours()-Math.floor(Math.random()*900));
+        acts.push({ id:id8(), text:rnd(noteTemplates), author:rnd(owners), at:when.toISOString() });
+      }
+      acts.sort((x,y)=>new Date(y.at)-new Date(x.at));
+      opps[++oid]={
+        id:oid, title:`${company} — ${product}`,
+        description:`${product} engagement for ${company}. Scoped during Q2 review; decision driven by upcoming compliance audit and end-of-life infrastructure.`,
+        stageId:stage.id, owner, oneOff, mrr, closeDate:close.toISOString().slice(0,10),
+        quoteId:id8(), probability:[5,10,20,40,60,75,85,90,95,99][stageIds.indexOf(stage.id)],
+        activities:acts
+      };
+    }
+    return opps;
+  }
+
+  return {
+    me:()=>Promise.resolve({name:"Sarah Chen",email:"sarah.chen@yourmsp.com.au",role:"administrator",autotaskId:29501}),
+    stages:()=>Promise.resolve(stages),
+    opps:()=>new Promise(r=>setTimeout(()=>r(Object.values(build())),400)),
+    activities:(id)=>Promise.resolve(State.opps[id]?.activities||[]),
+    moveStage:(id,stageId)=>new Promise(r=>setTimeout(()=>{State.opps[id].stageId=stageId; r({ok:true});},260)),
+    patchOpp:(id,ch)=>new Promise(r=>setTimeout(()=>{Object.assign(State.opps[id],ch); r({ok:true});},300)),
+    addNote:(id,text)=>new Promise(r=>setTimeout(()=>{
+      const note={id:Math.floor(Math.random()*1e8),text,author:State.me.name,at:new Date().toISOString()};
+      State.opps[id].activities.unshift(note); r(note);},320)),
+    companyTickets:(id)=>Promise.resolve([
+      {id:90001,number:"T20260612.0042",title:"Email not syncing on mobile",linkedElsewhere:false},
+      {id:90002,number:"T20260605.0017",title:"New laptop setup",linkedElsewhere:false},
+      {id:90003,number:"T20260528.0009",title:"VPN access request",linkedElsewhere:true},
+    ]),
+    associateTicket:(id,ticketId)=>new Promise(r=>setTimeout(()=>{
+      const map={90001:"T20260612.0042",90002:"T20260605.0017",90003:"T20260528.0009"};
+      r({ok:true,ticket:{id:ticketId,number:map[ticketId]||("T"+ticketId),title:"Associated ticket"}});},300)),
+    admins:()=>Promise.resolve(["sarah.chen@yourmsp.com.au","it.admin@yourmsp.com.au"]),
+    saveSettings:(p)=>new Promise(r=>setTimeout(()=>r({ok:true}),300)),
+    saveAdmins:(l)=>new Promise(r=>setTimeout(()=>r({ok:true}),250)),
+  };
+})();
+
+// pick the active backend
+const Backend = () => (Api.isLive() ? Api.live : Demo);
+
+/* =========================================================================
+   AUTH  — shared team password + Autotask resource picker (no Microsoft/Entra)
+   ========================================================================= */
+const SESSION_KEY = "pipeline_session";
+
+/* Step 1: verify the team password and load the name picker. */
+async function pwContinue(){
+  $("#loginNote").textContent = "";
+  const pw = $("#appPassword").value;
+  if(!pw){ $("#loginNote").textContent = "Enter the team password."; return; }
+  $("#pwContinue").disabled = true; $("#pwContinue").textContent = "Checking…";
+  try{
+    const resp = await Api.live.resources(pw);
+    // backend returns { resources, otpRequired }; tolerate an older array-only response
+    const list = Array.isArray(resp) ? resp : ((resp && resp.resources) || []);
+    const otpOn = !Array.isArray(resp) && !!(resp && resp.otpRequired);
+    if(!list.length) throw new Error("No active Autotask resources were returned.");
+    $("#resourceSelect").innerHTML = list.map(r=>`<option value="${r.id}">${esc(r.name)}</option>`).join("");
+    $("#otpInput").style.display = otpOn ? "block" : "none";
+    $("#appPassword").setAttribute("disabled","disabled");
+    $("#pwContinue").style.display = "none";
+    $("#pickWrap").style.display = "block";
+    if(otpOn) $("#otpInput").focus();
+  }catch(e){
+    $("#pwContinue").disabled = false; $("#pwContinue").textContent = "Continue";
+    $("#loginNote").innerHTML = `<span style="color:#dc2626">${esc(e.message||"Could not verify the password.")}</span>`;
+  }
+}
+
+/* Step 2: pick your name, get a session token, and load the board. */
+async function enterPipeline(){
+  $("#loginNote").textContent = "";
+  const pw = $("#appPassword").value;
+  const sel = $("#resourceSelect");
+  const resourceId = sel.value;
+  const name = sel.options.length ? sel.options[sel.selectedIndex].text : "";
+  const otpShown = $("#otpInput").style.display !== "none";
+  const otp = ($("#otpInput").value || "").trim();
+  if(otpShown && !/^\d{6}$/.test(otp)){ $("#loginNote").textContent = "Enter the 6-digit authenticator code."; return; }
+  $("#enterBtn").disabled = true; $("#enterBtn").textContent = "Signing in…";
+  try{
+    const r = await Api.live.login(pw, resourceId, name, otp);
+    Api.setToken(r.token);
+    try{ localStorage.setItem(SESSION_KEY, r.token); }catch(_){}
+    await boot();
+  }catch(e){
+    $("#enterBtn").disabled = false; $("#enterBtn").textContent = "Enter pipeline";
+    $("#loginNote").innerHTML = `<span style="color:#dc2626">${esc(e.message||"Sign-in failed.")}</span>`;
+  }
+}
+
+async function startDemo(){
+  CONFIG.DEMO_MODE = true;
+  await boot();
+}
+
+/* On load, reuse a still-valid session so people aren't asked to sign in every visit. */
+async function tryRestore(){
+  if(CONFIG.DEMO_MODE || !CONFIG.API_BASE) return;
+  let saved=null; try{ saved = localStorage.getItem(SESSION_KEY); }catch(_){}
+  if(!saved) return;
+  Api.setToken(saved);
+  try{ await boot(); }
+  catch(_){ Api.setToken(null); try{ localStorage.removeItem(SESSION_KEY); }catch(__){} }
+}
+
+/* =========================================================================
+   BOOT  — load identity, stages, opportunities; render board
+   ========================================================================= */
+async function boot(){
+  const B = Backend();
+  try{
+    $("#envPill").textContent = CONFIG.DEMO_MODE ? "Demo data" : "Live · Autotask";
+    $("#envPill").className = "env-pill" + (CONFIG.DEMO_MODE ? " demo" : "");
+    State.me = await B.me();
+    State.admins = await B.admins().catch(()=>[]);
+    renderMe();
+    $("#login").style.display = "none";
+    $("#app").classList.add("ready");
+    await loadBoard(true);
+  }catch(e){
+    $("#loginNote").innerHTML = `<span style="color:#dc2626">${esc(e.message)}</span>`;
+  }
+}
+
+function renderMe(){
+  $("#avatarBtn").textContent = initials(State.me.name);
+  $("#meName").textContent = State.me.name;
+  $("#meEmail").textContent = State.me.resourceId ? ("Autotask resource #"+State.me.resourceId) : (State.me.email||"");
+  const isAdmin = State.me.role === "administrator";
+  $("#settingsBtn").style.display = isAdmin ? "flex" : "none";
+  $("#roleTag").style.display = isAdmin ? "inline-block" : "none";
+}
+
+async function loadBoard(firstLoad){
+  const B = Backend();
+  setSync("loading");
+  if(firstLoad) renderSkeleton();
+  try{
+    const [stages, opps] = await Promise.all([B.stages(), B.opps()]);
+    State.stages = stages.slice().sort(byStageOrder);
+    State.opps = {}; State.byStage = {}; State.rendered = {};
+    State.stages.forEach(s => { State.byStage[s.id]=[]; State.rendered[s.id]=0; });
+    opps.forEach(o => { State.opps[o.id]=o; (State.byStage[o.stageId] ||= []).push(o.id); });
+    // default each column to highest one-off revenue first
+    State.stages.forEach(s => { if(!State.stageSort[s.id]) State.stageSort[s.id]={field:"oneOff",dir:"desc"}; sortColumn(s.id); });
+    State.lastSync = new Date();
+    renderStageFilter();
+    populateFilters();
+    renderBoard();
+    updateTotals();
+    setSync("ok");
+  }catch(e){
+    setSync("error");
+    toast(e.message, "err");
+  }
+}
+const latestAt = o => o.activities?.[0]?.at || o.closeDate || "1970";
+
+function setSync(s){
+  const map={loading:["Pulling from Autotask…",true],ok:["Synced "+(State.lastSync?fmtWhen(State.lastSync.toISOString()):""),false],
+             error:["Sync failed",false], stale:["Unsynced changes",false]};
+  const [txt,spin]=map[s]||map.ok;
+  $("#syncText").textContent = txt;
+  $("#syncStatus").querySelector(".dot").className = "dot" + (s==="ok"?"":" stale");
+  $("#refreshBtn").classList.toggle("spin", spin);
+}
+
+/* =========================================================================
+   RENDERING
+   ========================================================================= */
+function renderSkeleton(){
+  const board=$("#board"); board.innerHTML="";
+  for(let i=0;i<5;i++){
+    const col=el("div","col");
+    col.innerHTML=`<div class="col-head"><div class="bar"></div><div class="sk" style="height:14px;width:60%"></div></div>
+      <div class="col-body">${'<div class="sk" style="height:118px"></div>'.repeat(3)}</div>`;
+    board.appendChild(col);
+  }
+}
+
+function stageColor(idx,total){
+  // hue glides from slate-blue (lead) to teal-green (won)
+  const h = 212 - (idx/(Math.max(total-1,1))) * 62;   // 212 → 150
+  return `hsl(${h} 62% 45%)`;
+}
+
+function renderBoard(){
+  const board=$("#board"); board.innerHTML="";
+  State.stages.forEach((stage,idx)=>{
+    if(isHidden(stage.id)) return;
+    const ids = columnIds(stage.id);
+    const ss = State.stageSort[stage.id] || {field:"oneOff", dir:"desc"};
+    const arrow = f => ss.field===f ? (ss.dir==="asc"?" ↑":" ↓") : "";
+    const col = el("div","col"); col.dataset.stage=stage.id;
+    const accent = stageColor(idx, State.stages.length);
+    col.innerHTML = `
+      <div class="col-head">
+        <div class="bar" style="background:${accent}"></div>
+        <h3 title="${esc(stage.name)}">${esc(stage.name)}</h3>
+        <span class="count num">${ids.length}</span>
+      </div>
+      <div class="col-sum num">
+        <span class="col-sum-text">${stageSumLabel(ids)}</span>
+        <span class="sortgrp">
+          <button class="sortbtn ${ss.field==="oneOff"?"active":""}" data-sort="${stage.id}" data-field="oneOff" title="Sort by one-off value">$${arrow("oneOff")}</button>
+          <button class="sortbtn ${ss.field==="prob"?"active":""}" data-sort="${stage.id}" data-field="prob" title="Sort by probability">%${arrow("prob")}</button>
+          <button class="sortbtn ${ss.field==="id"?"active":""}" data-sort="${stage.id}" data-field="id" title="Sort by opportunity ID">ID${arrow("id")}</button>
+          <button class="sortbtn ${ss.field==="close"?"active":""}" data-sort="${stage.id}" data-field="close" title="Sort by projected close date">Date${arrow("close")}</button>
+        </span>
+      </div>
+      <div class="col-body" data-stage="${stage.id}"></div>`;
+    board.appendChild(col);
+    wireColumnDnD(col, stage.id);
+    col.querySelectorAll(".sortbtn").forEach(btn=> btn.addEventListener("click", e=>{ e.stopPropagation(); toggleSort(stage.id, btn.dataset.field); }));
+    const body = col.querySelector(".col-body");
+    renderMoreCards(stage.id, body);
+    // infinite scroll
+    body.addEventListener("scroll", ()=>{
+      if(body.scrollTop + body.clientHeight >= body.scrollHeight - 60) renderMoreCards(stage.id, body);
+    });
+  });
+}
+
+function renderMoreCards(stageId, body){
+  const ids = columnIds(stageId);
+  let n = State.rendered[stageId]||0;
+  if(n>=ids.length){ removeSentinel(body); return; }
+  const slice = ids.slice(n, n+PAGE);
+  removeSentinel(body);
+  slice.forEach(id => body.appendChild(buildCard(State.opps[id])));
+  State.rendered[stageId] = n + slice.length;
+  if(State.rendered[stageId] < ids.length){
+    const s = el("div","col-loading sentinel", `Showing ${State.rendered[stageId]} of ${ids.length}`);
+    body.appendChild(s);
+  }
+}
+function removeSentinel(body){ body.querySelector(".sentinel")?.remove(); }
+
+function sortColumn(stageId){
+  const s = State.stageSort[stageId] || {field:"oneOff", dir:"desc"};
+  const arr = State.byStage[stageId]||[];
+  if(s.field==="close"){
+    arr.sort((a,b)=>{
+      const ta=State.opps[a].closeDate?Date.parse(State.opps[a].closeDate):null;
+      const tb=State.opps[b].closeDate?Date.parse(State.opps[b].closeDate):null;
+      if(ta===null && tb===null) return 0;
+      if(ta===null) return 1;            // undated opportunities always sort last
+      if(tb===null) return -1;
+      return s.dir==="asc" ? ta-tb : tb-ta;
+    });
+    return;
+  }
+  const val = s.field==="prob" ? (o=>o.probability||0)
+            : s.field==="id"   ? (o=>Number(o.id)||0)
+            : (o=>o.oneOff||0);
+  arr.sort((a,b)=>{
+    const va=val(State.opps[a]), vb=val(State.opps[b]);
+    return s.dir==="asc" ? va-vb : vb-va;
+  });
+}
+function rerenderBoard(){
+  State.stages.forEach(s=> State.rendered[s.id]=0);
+  renderBoard();
+}
+function toggleSort(stageId, field){
+  const s = State.stageSort[stageId] || {field:"oneOff", dir:"desc"};
+  if(s.field===field){ s.dir = s.dir==="asc" ? "desc" : "asc"; }
+  else { s.field = field; s.dir = "desc"; }
+  State.stageSort[stageId] = s;
+  sortColumn(stageId);
+  rerenderBoard();
+}
+function fillSelect(node, allLabel, values, current, key){
+  if(!node) return;
+  const keep = values.includes(current) ? current : "all";
+  State[key] = keep;
+  node.innerHTML = "";
+  const optAll = document.createElement("option"); optAll.value="all"; optAll.textContent=allLabel; node.appendChild(optAll);
+  values.forEach(v=>{ const o=document.createElement("option"); o.value=v; o.textContent=v; if(v===keep) o.selected=true; node.appendChild(o); });
+}
+function populateFilters(){
+  const opps = Object.values(State.opps);
+  const owners  = [...new Set(opps.map(o=>o.owner).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const clients = [...new Set(opps.map(o=>o.company).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  fillSelect($("#ownerSelect"),  "All owners",  owners,  State.ownerFilter,  "ownerFilter");
+  fillSelect($("#clientSelect"), "All clients", clients, State.clientFilter, "clientFilter");
+}
+function renderStageFilter(){
+  const menu = $("#stagesMenu"); if(!menu) return;
+  menu.innerHTML =
+    `<div class="who"><b>Show stages</b><span>Saved on this device</span></div><hr/>`
+    + `<div class="stage-checks">`
+    + State.stages.map(s=>`<label class="stage-check"><input type="checkbox" data-stagechk="${s.id}" ${isHidden(s.id)?"":"checked"}/><span>${esc(s.name)}</span></label>`).join("")
+    + `</div><hr/>`
+    + `<div class="stage-actions"><button class="btn line small" id="stagesAll">Show all</button><button class="btn line small" id="stagesNone">Hide all</button></div>`;
+  menu.querySelectorAll("[data-stagechk]").forEach(chk=>{
+    chk.addEventListener("change", ()=>{
+      const id=String(chk.dataset.stagechk);
+      if(chk.checked) State.hiddenStages.delete(id); else State.hiddenStages.add(id);
+      saveHidden(); rerenderBoard(); updateTotals();
+    });
+  });
+  $("#stagesAll").onclick=()=>{ State.hiddenStages.clear(); saveHidden(); renderStageFilter(); rerenderBoard(); updateTotals(); };
+  $("#stagesNone").onclick=()=>{ State.stages.forEach(s=>State.hiddenStages.add(String(s.id))); saveHidden(); renderStageFilter(); rerenderBoard(); updateTotals(); };
+}
+
+function buildCard(o){
+  const card = el("div","card"); card.draggable=true; card.dataset.id=o.id;
+  const last = o.lastNote || (CONFIG.DEMO_MODE ? o.activities?.[0] : null);   // latest human note
+  const overdue = isOverdue(o.closeDate);
+  card.innerHTML = `
+    <div class="title">${esc(o.title)}</div>
+    ${o.company?`<div class="company">${esc(o.company)}</div>`:""}
+    <div class="desc">${esc(o.description)}</div>
+    <div class="row">
+      <div class="rev">${fmtMoney(o.oneOff)}<span class="prob num">${o.probability??0}%</span>${o.mrr?`<span class="mrr num">+ ${fmtMoney(o.mrr)}/mo</span>`:""}</div>
+      <span class="datechip ${overdue?"overdue":""}" data-date>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span data-datelabel>${fmtDate(o.closeDate)}</span>
+      </span>
+    </div>
+    ${ last
+      ? `<div class="activity"><div class="meta"><b>${esc(last.author)}</b> · ${fmtWhen(last.at)}</div><div class="body">${esc(last.text)}</div></div>`
+      : `<div class="activity empty">No activity yet — add a note</div>` }
+    <div class="foot">
+      ${ o.quoteId ? `<a class="qlink" href="${quoteUrl(o)}" target="_blank" rel="noopener" data-stop>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+        Quote #${o.quoteNumber}
+      </a>` : `<span class="qlink" style="opacity:.45">No linked quote</span>` }
+      ${ (o.tickets && o.tickets.length)
+        ? `<span class="tkt has" title="${o.tickets.length} linked ticket${o.tickets.length>1?"s":""}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z"/><path d="M9 8v8"/></svg>${o.tickets.length>1?o.tickets.length:""}</span>`
+        : `<span class="tkt none" title="No linked ticket"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z"/><path d="M9 8v8"/></svg></span>` }
+      <span class="owner" title="${esc(o.owner)}"><span class="mini-av">${initials(o.owner)}</span></span>
+    </div>`;
+
+  // open modal on click (but not when interacting with date/quote)
+  card.addEventListener("click", e=>{
+    if(e.target.closest("[data-stop]")||e.target.closest("[data-date]")||card.dataset.editing) return;
+    openOpp(o.id);
+  });
+  // inline date edit
+  card.querySelector("[data-date]").addEventListener("click", e=>{ e.stopPropagation(); inlineEditDate(card, o); });
+  // DnD
+  card.addEventListener("dragstart", e=>{
+    card.classList.add("dragging"); card.dataset.editing="";
+    e.dataTransfer.setData("text/plain", o.id); e.dataTransfer.effectAllowed="move";
+  });
+  card.addEventListener("dragend", ()=> card.classList.remove("dragging"));
+  return card;
+}
+
+function quoteUrl(o){ return `${CONFIG.QUOTE_BASE}?opportunityId=${o.id}&quoteId=${o.quoteId}`; }
+function oppUrl(oid){ return `${CONFIG.AUTOTASK_UI_BASE}/Mvc/CRM/OpportunityDetail.mvc?opportunityId=${oid}`; }
+function ticketUrl(t){ return `${CONFIG.TICKET_BASE}?ticketId=${t.id}`; }
+function randSync(){ let s=""; const a="abcdefghijklmnopqrstuvwxyz0123456789"; for(let i=0;i<21;i++) s+=a[Math.floor(Math.random()*a.length)]; return s; }
+function newTicketUrl(o){
+  const p = new URLSearchParams({
+    entityId: o.id, entityType: "3", ticketType: "",
+    stopwatchSyncCode: randSync(), categoryId: CONFIG.TICKET_NEW_CATEGORY,
+    source: "0", appliedFormTemplateId: ""
+  });
+  return `${CONFIG.TICKET_NEW_BASE}?${p.toString()}`;
+}
+
+/* ---- inline close-date editing on the card ---- */
+function inlineEditDate(card, o){
+  const chip = card.querySelector("[data-date]");
+  if(chip.querySelector("input")) return;
+  card.dataset.editing="1";
+  const prev = o.closeDate;
+  chip.innerHTML = `<input type="date" value="${o.closeDate||""}" />`;
+  const inp = chip.querySelector("input"); inp.focus(); inp.showPicker?.();
+  const commit = async ()=>{
+    const v = inp.value;
+    card.removeAttribute("data-editing");
+    if(!v || v===prev){ restoreChip(); return; }
+    o.closeDate = v; restoreChip();
+    try{ await Backend().patchOpp(o.id,{closeDate:v}); toast("Close date updated in Autotask"); updateTotals(); }
+    catch(err){ o.closeDate=prev; restoreChip(); toast(err.message,"err"); }
+  };
+  function restoreChip(){
+    chip.className = "datechip " + (isOverdue(o.closeDate)?"overdue":"");
+    chip.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span data-datelabel>${fmtDate(o.closeDate)}</span>`;
+    chip.addEventListener("click", e=>{ e.stopPropagation(); inlineEditDate(card,o); });
+  }
+  inp.addEventListener("blur", commit);
+  inp.addEventListener("keydown", e=>{ if(e.key==="Enter") inp.blur(); if(e.key==="Escape"){ inp.value=prev; inp.blur(); } });
+}
+
+/* =========================================================================
+   DRAG & DROP between stages  → writes to Autotask immediately
+   ========================================================================= */
+function wireColumnDnD(col, stageId){
+  col.addEventListener("dragover", e=>{ e.preventDefault(); col.classList.add("drag-over"); e.dataTransfer.dropEffect="move"; });
+  col.addEventListener("dragleave", e=>{ if(!col.contains(e.relatedTarget)) col.classList.remove("drag-over"); });
+  col.addEventListener("drop", async e=>{
+    e.preventDefault(); col.classList.remove("drag-over");
+    const id = +e.dataTransfer.getData("text/plain");
+    const o = State.opps[id]; if(!o) return;
+    const from = o.stageId; if(from===stageId) return;
+    moveCardData(id, from, stageId);
+    renderColumnBodies([from, stageId]);
+    updateTotals();
+    try{
+      await Backend().moveStage(id, stageId);
+      const sn = State.stages.find(s=>s.id===stageId)?.name;
+      toast(`Moved to “${sn}” in Autotask`);
+    }catch(err){
+      moveCardData(id, stageId, from);
+      renderColumnBodies([from, stageId]); updateTotals();
+      toast(err.message,"err");
+    }
+  });
+}
+function moveCardData(id, from, to){
+  State.opps[id].stageId = to;
+  State.byStage[from] = (State.byStage[from]||[]).filter(x=>x!==id);
+  (State.byStage[to] ||= []).unshift(id);
+}
+function renderColumnBodies(stageIds){
+  stageIds.forEach(sid=>{
+    const col = $(`.col[data-stage="${sid}"]`); if(!col) return;
+    const body = col.querySelector(".col-body");
+    State.rendered[sid]=0; body.innerHTML="";
+    renderMoreCards(sid, body);
+    const ids = columnIds(sid);
+    col.querySelector(".count").textContent = ids.length;
+    col.querySelector(".col-sum-text").textContent = stageSumLabel(ids);
+  });
+}
+
+function stageNumOf(stageId){
+  const s = State.stages.find(x=>x.id===stageId);
+  return s ? stageOrderKey(s.name)[0] : null;
+}
+function updateTotals(){
+  const opps = Object.values(State.opps);
+  // active opportunities — respects the show/hide, period, owner and client filters
+  const visible = opps.filter(o => !isHidden(o.stageId) && periodMatch(o.closeDate) && ownerClientMatch(o) && searchMatch(o));
+  $("#totalOpps").textContent = visible.length;
+  // weighted pipeline — one-off revenue × probability, Stage 6 & 7 only, within the current filters
+  const weighted = opps
+    .filter(o => periodMatch(o.closeDate) && ownerClientMatch(o) && searchMatch(o) && [6,7].includes(stageNumOf(o.stageId)))
+    .reduce((t,o)=> t + (o.oneOff||0)*((o.probability||0)/100), 0);
+  $("#totalRev").textContent = fmtMoney(weighted);
+}
+
+/* =========================================================================
+   OPPORTUNITY DETAIL MODAL  (edit title / description / close date, add notes)
+   ========================================================================= */
+let openOppId = null;
+function openOpp(id){
+  const o = State.opps[id]; if(!o) return;
+  openOppId = id;
+  const stageName = State.stages.find(s=>s.id===o.stageId)?.name || "—";
+  const m = $("#oppModal");
+  m.innerHTML = `
+    <div class="modal-head">
+      <div style="min-width:0">
+        <span class="stage-tag">${esc(stageName)}</span>
+        <h2 id="oppTitleH">${esc(o.title)}</h2>
+        ${o.company?`<div class="opp-company">${esc(o.company)}</div>`:""}
+      </div>
+      <button class="icon-btn" id="closeOpp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>Opportunity title</label><input class="inp" id="fTitle" value="${esc(o.title)}"/></div>
+      <div class="field"><label>Description</label><textarea class="inp" id="fDesc">${esc(o.description)}</textarea></div>
+      <div class="grid2">
+        <div class="field"><label>Projected close date</label><input class="inp" type="date" id="fClose" value="${esc(o.closeDate||"")}"/></div>
+        <div class="field"><label>Probability (%)</label><input class="inp" type="number" id="fProb" min="0" max="100" step="5" value="${o.probability ?? 0}"/></div>
+      </div>
+      <div class="field"><label>Opportunity owner</label><div class="ro" style="padding-top:9px"><span class="mini-av" style="display:inline-grid;vertical-align:middle;margin-right:7px">${initials(o.owner)}</span>${esc(o.owner)}</div></div>
+      <div class="grid2">
+        <div class="metric"><div class="k">One-off revenue</div><div class="v num">${fmtMoneyFull(o.oneOff)}</div></div>
+        <div class="metric"><div class="k">Monthly recurring</div><div class="v num teal">${o.mrr?fmtMoneyFull(o.mrr):"—"}</div></div>
+      </div>
+      <div class="links-row" style="margin-top:14px">
+        ${ o.quoteId ? `<a class="ext-link" href="${quoteUrl(o)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>Open quote #${o.quoteNumber}</a>` : "" }
+        <a class="ext-link" href="${oppUrl(o.id)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><path d="M15 3h6v6M10 14 21 3"/></svg>Open in Autotask</a>
+        ${ (o.tickets||[]).map(t=>`<a class="ext-link" href="${ticketUrl(t)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z"/><path d="M9 8v8"/></svg>Ticket #${esc(t.number)}</a>`).join("") }
+        <a class="create-ticket" href="${newTicketUrl(o)}" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Create linked ticket</a>
+        <button type="button" class="assoc-ticket" id="assocTicketBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17H7A5 5 0 0 1 7 7h2M15 7h2a5 5 0 0 1 0 10h-2M8 12h8"/></svg>Associate existing ticket</button>
+      </div>
+      <div class="assoc-panel" id="assocPanel" style="display:none">
+        <input type="text" class="inp" id="assocSearch" placeholder="Search by number or title…" autocomplete="off" spellcheck="false" />
+        <div class="assoc-row">
+          <select class="inp" id="assocSelect"><option value="">Loading tickets…</option></select>
+          <button type="button" class="btn solid small" id="assocGo" disabled>Associate</button>
+          <button type="button" class="btn line small" id="assocCancel">Cancel</button>
+        </div>
+        <div class="assoc-note" id="assocNote"></div>
+      </div>
+      ${ (o.tickets && o.tickets.length) ? `<div class="ticket-copy">
+        <span class="tc-label">Linked ticket${o.tickets.length>1?"s":""}</span>
+        <code class="tc-nums">${o.tickets.map(t=>esc(t.number)).join(", ")}</code>
+        <button class="tc-copy" id="ticketCopyBtn" type="button" data-copy="${esc(o.tickets.map(t=>t.number).join(", "))}">Copy</button>
+      </div>` : "" }
+
+      <div class="section-label">Activity <span class="pill">last 5 · synced with Autotask</span></div>
+      <div class="feed" id="feed"></div>
+      <div class="add-note">
+        <textarea class="inp" id="newNote" placeholder="Add an update — e.g. “Booked a follow-up for Thursday”"></textarea>
+        <button class="btn solid small" id="addNoteBtn">Add note</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <span class="left" id="dirtyNote"></span>
+      <div class="grow"></div>
+      <button class="btn line" id="cancelOpp">Close</button>
+      <button class="btn solid" id="saveOpp" disabled>Save changes</button>
+    </div>`;
+
+  if(o.activities && o.activities.length){ renderFeed(o); }
+  else { $("#feed").innerHTML = `<div class="activity empty">Loading activity…</div>`; }
+  loadActivities(o);
+  $("#oppScrim").classList.add("open");
+
+  const markDirty=()=>{
+    const changed = $("#fTitle").value!==o.title || $("#fDesc").value!==o.description || $("#fClose").value!==(o.closeDate||"") || (parseInt($("#fProb").value,10)||0)!==(o.probability??0);
+    $("#saveOpp").disabled = !changed;
+    $("#dirtyNote").textContent = changed ? "Unsaved changes" : "";
+    changed ? State.dirty.add(id) : State.dirty.delete(id);
+  };
+  ["fTitle","fDesc","fClose","fProb"].forEach(f=>$("#"+f).addEventListener("input", markDirty));
+
+  $("#closeOpp").onclick = $("#cancelOpp").onclick = tryCloseOpp;
+  $("#saveOpp").onclick = ()=>saveOpp(o);
+  $("#addNoteBtn").onclick = ()=>addNote(o);
+  const tcBtn = $("#ticketCopyBtn");
+  if(tcBtn) tcBtn.onclick = ()=>{
+    const v = tcBtn.dataset.copy || "";
+    const done = ()=>{ tcBtn.textContent="Copied!"; setTimeout(()=>{ tcBtn.textContent="Copy"; }, 1500); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(v).then(done).catch(()=>{ fallbackCopy(v); done(); });
+    } else { fallbackCopy(v); done(); }
+  };
+
+  // ---- associate existing ticket (native, via REST) ----
+  const assocBtn = $("#assocTicketBtn");
+  if(assocBtn){
+    const panel=$("#assocPanel"), search=$("#assocSearch"), sel=$("#assocSelect"), go=$("#assocGo"), note=$("#assocNote");
+    let loaded=false, allTickets=[];
+    const renderOpts = ()=>{
+      if(!allTickets.length){
+        sel.innerHTML = `<option value="">No open tickets in the last 6 months for ${esc(o.company||"this company")}</option>`;
+        go.disabled = true; return;
+      }
+      const q = (search.value||"").trim().toLowerCase();
+      const list = q ? allTickets.filter(t => (`#${t.number} ${t.title}`).toLowerCase().includes(q)) : allTickets;
+      if(!list.length){ sel.innerHTML = `<option value="">No tickets match your search</option>`; go.disabled = true; return; }
+      sel.innerHTML = list.map(t=>
+        `<option value="${t.id}">#${esc(t.number)} — ${esc(t.title||"")}${t.linkedElsewhere?" (linked elsewhere)":""}</option>`).join("");
+      sel.selectedIndex = 0; go.disabled = false;
+    };
+    assocBtn.onclick = async ()=>{
+      const showing = panel.style.display !== "none";
+      panel.style.display = showing ? "none" : "block";
+      if(showing) return;
+      if(!loaded){
+        sel.innerHTML = `<option value="">Loading tickets…</option>`; go.disabled = true; note.textContent = "";
+        try{
+          allTickets = (await Backend().companyTickets(o.id)) || [];
+          loaded = true; renderOpts();
+        }catch(e){
+          sel.innerHTML = `<option value="">Couldn't load tickets</option>`;
+          note.innerHTML = `<span style="color:#dc2626">${esc(e.message||"Failed to load tickets")}</span>`;
+        }
+      }
+      search.focus();
+    };
+    search.oninput = renderOpts;
+    sel.onchange = ()=>{ go.disabled = !sel.value; };
+    $("#assocCancel").onclick = ()=>{ panel.style.display = "none"; };
+    go.onclick = async ()=>{
+      const ticketId = sel.value; if(!ticketId) return;
+      go.disabled = true; go.textContent = "Associating…"; note.textContent = "";
+      try{
+        const res = await Backend().associateTicket(o.id, Number(ticketId));
+        const t = res && res.ticket;
+        const oo = State.opps[o.id]; oo.tickets = oo.tickets || [];
+        if(t && !oo.tickets.some(x=>Number(x.id)===Number(t.id))) oo.tickets.push({id:t.id,number:t.number,title:t.title});
+        rerenderBoard();
+        openOpp(o.id);            // re-render the modal so the new linked ticket shows
+        toast("Ticket associated in Autotask");
+      }catch(e){
+        go.disabled = false; go.textContent = "Associate";
+        note.innerHTML = `<span style="color:#dc2626">${esc(e.message||"Could not associate ticket")}</span>`;
+      }
+    };
+  }
+}
+function fallbackCopy(text){
+  try{ const ta=document.createElement("textarea"); ta.value=text; ta.style.position="fixed"; ta.style.opacity="0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); }catch(_){}
+}
+
+function renderFeed(o){
+  const feed=$("#feed"); feed.innerHTML="";
+  const acts=(o.activities||[]).slice(0,5);
+  if(!acts.length){ feed.appendChild(el("div","activity empty","No activity recorded yet.")); return; }
+  acts.forEach(a=> feed.appendChild(el("div","activity",
+    `<div class="meta"><b>${esc(a.author)}</b> · ${fmtWhen(a.at)} · ${new Date(a.at).toLocaleString("en-AU",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"})}</div><div class="body">${esc(a.text)}</div>`)));
+}
+
+// Re-fetch the latest notes from Autotask so reopening a card shows everything,
+// not just notes added in this session.
+async function loadActivities(o){
+  try{
+    const acts = await Backend().activities(o.id);
+    if(Array.isArray(acts)){
+      o.activities = acts;
+      if(openOppId===o.id) renderFeed(o);
+    }
+  }catch(_){ if(openOppId===o.id) renderFeed(o); }
+}
+
+async function addNote(o){
+  const ta=$("#newNote"); const text=ta.value.trim(); if(!text) return;
+  const btn=$("#addNoteBtn"); btn.disabled=true; btn.textContent="Saving…";
+  try{
+    const note = await Backend().addNote(o.id, text);
+    if(!State.opps[o.id].activities) State.opps[o.id].activities=[];
+    // demo already unshifts; guard against double-insert
+    if(!State.opps[o.id].activities.includes(note)) State.opps[o.id].activities.unshift(note);
+    State.opps[o.id].lastNote = note;   // freshest human note -> card preview
+    ta.value="";
+    renderFeed(State.opps[o.id]);
+    refreshCard(o.id);
+    toast("Note added to the Autotask activity log");
+  }catch(e){ toast(e.message,"err"); }
+  finally{ btn.disabled=false; btn.textContent="Add note"; }
+}
+
+async function saveOpp(o){
+  const changes={};
+  const t=$("#fTitle").value.trim(), d=$("#fDesc").value.trim(), c=$("#fClose").value;
+  const p=Math.max(0,Math.min(100, parseInt($("#fProb").value,10)||0));
+  if(t!==o.title) changes.title=t;
+  if(d!==o.description) changes.description=d;
+  if(c!==(o.closeDate||"")) changes.closeDate=c;
+  if(p!==(o.probability??0)) changes.probability=p;
+  if(!Object.keys(changes).length) return;
+  const btn=$("#saveOpp"); btn.disabled=true; btn.textContent="Saving…";
+  try{
+    await Backend().patchOpp(o.id, changes);
+    Object.assign(o, changes);
+    State.dirty.delete(o.id);
+    $("#dirtyNote").textContent="";
+    refreshCard(o.id); updateTotals();
+    // reflect new title in header
+    $("#oppTitleH").textContent=o.title;
+    toast("Opportunity saved to Autotask");
+    btn.textContent="Saved";
+    setTimeout(()=>{btn.textContent="Save changes";},1200);
+  }catch(e){ toast(e.message,"err"); btn.disabled=false; btn.textContent="Save changes"; }
+}
+
+function refreshCard(id){
+  const old=$(`.card[data-id="${id}"]`); if(!old) return;
+  const fresh=buildCard(State.opps[id]); old.replaceWith(fresh);
+}
+
+function tryCloseOpp(){
+  if(openOppId!=null && State.dirty.has(openOppId)){
+    if(!confirm("You have unsaved changes to this opportunity. Discard them?")) return;
+    State.dirty.delete(openOppId);
+  }
+  $("#oppScrim").classList.remove("open"); openOppId=null;
+}
+$("#oppScrim").addEventListener("mousedown", e=>{ if(e.target.id==="oppScrim") tryCloseOpp(); });
+
+/* =========================================================================
+   SETTINGS  (admin only)
+   ========================================================================= */
+function openSettings(){
+  $("#setBaseUrl").value = State.settings.baseUrl || (CONFIG.DEMO_MODE ? "https://webservices12.autotask.net/atservicesrest" : "");
+  $("#setApiKey").value = "";
+  renderAdmins();
+  $("#setScrim").classList.add("open");
+  closeMenu();
+}
+function renderAdmins(){
+  const wrap=$("#adminList"); wrap.innerHTML="";
+  State.admins.forEach(a=>{
+    const chip=el("div","admin-chip",`${esc(a)}<button title="Remove" data-rm="${esc(a)}">×</button>`);
+    wrap.appendChild(chip);
+  });
+  wrap.querySelectorAll("[data-rm]").forEach(b=> b.onclick=()=>{
+    State.admins = State.admins.filter(x=>x!==b.dataset.rm); renderAdmins();
+  });
+}
+$("#addAdmin").onclick=()=>{
+  const v=$("#newAdmin").value.trim().toLowerCase();
+  if(!v||!v.includes("@")){ toast("Enter a valid email","err"); return; }
+  if(!State.admins.includes(v)) State.admins.push(v);
+  $("#newAdmin").value=""; renderAdmins();
+};
+$("#saveSettings").onclick=async()=>{
+  const btn=$("#saveSettings"); btn.disabled=true; btn.textContent="Saving…";
+  try{
+    await Backend().saveSettings({ baseUrl:$("#setBaseUrl").value.trim(), apiKey:$("#setApiKey").value.trim()||undefined });
+    await Backend().saveAdmins(State.admins);
+    State.settings.baseUrl=$("#setBaseUrl").value.trim();
+    toast("Settings saved to Key Vault");
+    $("#setScrim").classList.remove("open");
+  }catch(e){ toast(e.message,"err"); }
+  finally{ btn.disabled=false; btn.textContent="Save settings"; }
+};
+document.querySelectorAll("[data-close-set]").forEach(b=> b.onclick=()=>$("#setScrim").classList.remove("open"));
+$("#setScrim").addEventListener("mousedown", e=>{ if(e.target.id==="setScrim") $("#setScrim").classList.remove("open"); });
+
+/* =========================================================================
+   WIRING
+   ========================================================================= */
+$("#pwContinue").onclick = pwContinue;
+$("#enterBtn").onclick = enterPipeline;
+$("#appPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") pwContinue(); });
+$("#otpInput").addEventListener("keydown", e=>{ if(e.key==="Enter") enterPipeline(); });
+$("#demoLogin").onclick = startDemo;
+tryRestore();
+$("#refreshBtn").onclick = ()=>{
+  if(State.dirty.size){ if(!confirm("You have unsaved changes that will be lost on refresh. Continue?")) return; State.dirty.clear(); }
+  loadBoard(false);
+};
+$("#avatarBtn").onclick = e=>{ e.stopPropagation(); $("#stagesMenu")?.classList.remove("open"); $("#helpMenu")?.classList.remove("open"); $("#userMenu").classList.toggle("open"); };
+$("#stagesBtn").onclick = e=>{ e.stopPropagation(); $("#userMenu").classList.remove("open"); $("#helpMenu")?.classList.remove("open"); $("#stagesMenu").classList.toggle("open"); };
+$("#helpBtn").onclick = e=>{ e.stopPropagation(); $("#userMenu").classList.remove("open"); $("#stagesMenu")?.classList.remove("open"); $("#helpMenu").classList.toggle("open"); };
+function openHelp(page){ window.open(page + "?v=" + encodeURIComponent(CONFIG.APP_VERSION), "_blank", "noopener"); }
+$("#guideBtn").onclick = ()=>{ openHelp("user-guide.html"); closeMenu(); };
+$("#changelogBtn").onclick = ()=>{ openHelp("changelog.html"); closeMenu(); };
+$("#periodSelect").onchange = e=>{ State.period = e.target.value; rerenderBoard(); updateTotals(); };
+$("#ownerSelect").onchange  = e=>{ State.ownerFilter  = e.target.value; rerenderBoard(); updateTotals(); };
+$("#clientSelect").onchange = e=>{ State.clientFilter = e.target.value; rerenderBoard(); updateTotals(); };
+$("#searchInput").oninput = e=>{
+  State.search = e.target.value.trim().toLowerCase();
+  $("#searchClear").classList.toggle("show", !!e.target.value);
+  rerenderBoard(); updateTotals();
+};
+$("#searchClear").onclick = ()=>{
+  $("#searchInput").value=""; State.search=""; $("#searchClear").classList.remove("show");
+  rerenderBoard(); updateTotals(); $("#searchInput").focus();
+};
+function closeMenu(){ $("#userMenu").classList.remove("open"); $("#stagesMenu")?.classList.remove("open"); $("#helpMenu")?.classList.remove("open"); }
+document.addEventListener("click", e=>{ if(!e.target.closest(".usermenu")) closeMenu(); });
+$("#settingsBtn").onclick = openSettings;
+$("#signOutBtn").onclick = ()=>{ try{ localStorage.removeItem(SESSION_KEY); }catch(_){} Api.setToken(null); location.reload(); };
+
+// global unsaved-changes guard for closing/navigating the browser
+window.addEventListener("beforeunload", e=>{ if(State.dirty.size){ e.preventDefault(); e.returnValue=""; } });
+
+document.addEventListener("keydown", e=>{
+  if(e.key==="Escape"){
+    if($("#oppScrim").classList.contains("open")) tryCloseOpp();
+    else if($("#setScrim").classList.contains("open")) $("#setScrim").classList.remove("open");
+  }
+});
+
+// First-run password ceremony (only meaningful in live mode for the temp admin)
+$("#savePw").onclick = async ()=>{
+  const a=$("#pw1").value, b=$("#pw2").value;
+  if(a.length<10){ toast("Use at least 10 characters","err"); return; }
+  if(a!==b){ toast("Passwords don't match","err"); return; }
+  $("#pwScrim").classList.remove("open");
+  toast("Password set. You're all set.");
+};
+
+/* Auto-enter demo if configured that way, else show login */
+$("#loginNote").innerHTML = CONFIG.DEMO_MODE
+  ? `Running in <b>demo mode</b> with sample data.`
+  : `Enter your team password, then pick your name to load the live Autotask board.`;
+</script>
+</body>
+</html>

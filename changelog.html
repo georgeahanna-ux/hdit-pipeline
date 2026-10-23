@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Pipeline — What's New</title>
+<style>
+  :root{
+    --ink:#0d1424; --accent:#0f766e; --accent-deep:#0b5e57; --accent-wash:#e8f3f2;
+    --line:#e3e7ee; --muted:#55606b; --bg:#f5f7fa; --warn:#9a6700; --warn-bg:#fff4d6; --ok:#0f766e; --ok-bg:#e8f3f2;
+    --font-ui:'Segoe UI',Inter,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box} html,body{margin:0}
+  body{font-family:var(--font-ui); color:var(--ink); background:var(--bg); line-height:1.6}
+  header.top{position:sticky; top:0; z-index:5; background:var(--ink); color:#fff; padding:14px 24px; display:flex; align-items:center; gap:14px}
+  header.top img{height:40px; background:#fff; padding:6px 10px; border-radius:8px}
+  header.top .t{font-weight:800; font-size:18px}
+  header.top .t small{display:block; font-weight:500; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:#9fb0c8}
+  header.top .print{margin-left:auto; background:transparent; border:1px solid rgba(255,255,255,.25); color:#fff; border-radius:8px; padding:7px 12px; font-size:13px; cursor:pointer}
+  .wrap{max-width:760px; margin:0 auto; padding:24px}
+  .ver-banner{border-radius:10px; padding:11px 15px; font-size:14px; margin:18px 0}
+  .ver-banner.ok{background:var(--ok-bg); color:var(--ok); border:1px solid #bfe0dd}
+  .ver-banner.warn{background:var(--warn-bg); color:var(--warn); border:1px solid #f0d999}
+  h1{font-size:26px; margin:6px 0 14px}
+  .rel{background:#fff; border:1px solid var(--line); border-radius:12px; padding:16px 20px; margin:14px 0}
+  .rel.current{border-color:var(--accent); box-shadow:0 1px 0 #bfe0dd}
+  .rel h2{margin:0 0 2px; font-size:18px; display:flex; align-items:center; gap:10px}
+  .tag{font-size:11px; font-weight:700; color:#fff; background:var(--accent); border-radius:999px; padding:2px 9px}
+  .date{color:var(--muted); font-size:13px; margin-bottom:8px}
+  .kind{font-weight:700; color:var(--accent-deep); font-size:13px; text-transform:uppercase; letter-spacing:.04em; margin-top:8px}
+  ul{margin:4px 0 0; padding-left:20px} li{margin:3px 0}
+  footer{color:var(--muted); font-size:13px; text-align:center; padding:30px 16px}
+  @media print{ header.top .print{display:none} header.top{position:static} }
+</style>
+</head>
+<body>
+<header class="top">
+  <img src="data:image/png;base64,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" alt="HD IT" />
+  <div class="t">Pipeline<small>Autotask Sales Board · What's New</small></div>
+  <button class="print" onclick="window.print()">Print</button>
+</header>
+
+<div class="wrap">
+  <div class="ver-banner" id="verBanner"></div>
+  <h1>What's new in Pipeline</h1>
+
+  <div class="rel current">
+    <h2>v1.12.0 <span class="tag">current</span></h2>
+    <div class="date">24 June 2026</div>
+    <div class="kind">Changed</div>
+    <ul>
+      <li>The <b>Associate existing ticket</b> picker is now searchable — type to filter by ticket number or title.</li>
+      <li>The list is tidier: completed/resolved tickets are hidden, only tickets from the last 6 months are shown, sorted newest first.</li>
+    </ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.11.0</h2>
+    <div class="date">24 June 2026</div>
+    <div class="kind">Changed</div>
+    <ul>
+      <li><b>Associate existing ticket</b> now works inside Pipeline: pick from a list of the company's tickets and it links to the opportunity straight away — no Autotask popup needed.</li>
+    </ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.10.0</h2>
+    <div class="date">24 June 2026</div>
+    <div class="kind">Added</div>
+    <ul>
+      <li>A small <b>ticket icon</b> on each card shows at a glance whether an opportunity has a linked ticket (highlighted, with a count if more than one) or not (faded).</li>
+      <li>An <b>Associate existing ticket</b> button in the opportunity detail, next to "Create linked ticket".</li>
+    </ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.9.1</h2>
+    <div class="date">24 June 2026</div>
+    <div class="kind">Fixed</div>
+    <ul>
+      <li>Sign-in now shows the real reason when a login is rejected (wrong password or wrong authenticator code) instead of a misleading "session expired" message.</li>
+    </ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.9.0</h2>
+    <div class="date">24 June 2026</div>
+    <div class="kind">Added</div>
+    <ul>
+      <li>Optional <b>two-factor sign-in</b>: when enabled, the login asks for a 6-digit authenticator code (from LastPass) as well as the team password.</li>
+      <li>Off unless your administrator turns it on, so nothing changes for you until then.</li>
+    </ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.8.0</h2>
+    <div class="date">24 June 2026</div>
+    <div class="kind">Added</div>
+    <ul>
+      <li>A <b>search box</b> in the top bar — type any part of an opportunity title and the board filters to matching cards instantly.</li>
+      <li>Search works together with the owner, client and period filters, and the headline totals update to match. A clear (×) button resets it.</li>
+    </ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.7.0</h2>
+    <div class="date">23 June 2026</div>
+    <div class="kind">Added</div>
+    <ul>
+      <li>A <b>Help menu</b> in the top bar with links to this guide and change log.</li>
+      <li>The User Guide and change log now show the version they relate to, so you can confirm you're reading the right one.</li>
+      <li>In-app version number, shown in the header.</li>
+    </ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.6.0</h2>
+    <div class="date">23 June 2026</div>
+    <div class="kind">Changed</div>
+    <ul><li>The HD IT logo now appears in the top-left of the board and on the sign-in screen.</li></ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.5.0</h2>
+    <div class="date">23 June 2026</div>
+    <div class="kind">Added</div>
+    <ul><li>Per-stage sort buttons for <b>Opportunity ID</b> and <b>Projected Close Date</b>, alongside Value and Probability.</li></ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.4.0</h2>
+    <div class="date">23 June 2026</div>
+    <div class="kind">Added</div>
+    <ul>
+      <li>Filter by <b>opportunity owner</b> and by <b>client</b>.</li>
+      <li><b>Current / Last / Next Week</b> options on the period filter.</li>
+      <li><b>Monthly recurring revenue (MRR) totals per stage</b>, alongside one-off totals.</li>
+    </ul>
+    <div class="kind">Changed</div>
+    <ul>
+      <li>"Create linked ticket" now uses ticket category 108.</li>
+      <li>The activity feed now shows <b>human notes only</b> — system entries are filtered out.</li>
+    </ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.3.0</h2>
+    <div class="date">23 June 2026</div>
+    <div class="kind">Added</div>
+    <ul><li>Win probability shown on each card; per-stage sort by probability.</li></ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.2.0</h2>
+    <div class="date">23 June 2026</div>
+    <div class="kind">Added</div>
+    <ul><li>Editable win probability in the opportunity detail.</li></ul>
+    <div class="kind">Changed</div>
+    <ul><li>Weighted pipeline now counts Stage 6 and Stage 7 opportunities only.</li></ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.1.0</h2>
+    <div class="date">23 June 2026</div>
+    <div class="kind">Added</div>
+    <ul><li>Latest human note shown on each card; copyable linked-ticket numbers in the detail.</li></ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.0.0 — Initial release</h2>
+    <div class="kind">Foundation</div>
+    <ul>
+      <li>Kanban board of active Autotask opportunities by sales stage.</li>
+      <li>Sign-in with shared team password + pick-your-name resource picker; admin role via resource-id list.</li>
+      <li>Active-opportunity count and weighted pipeline; period filter; show/hide stages; per-stage value sort and totals.</li>
+      <li>Opportunity detail with editing, quote &amp; ticket links, create linked ticket, activity feed and notes.</li>
+      <li>Drag-and-drop to change stage; hosted on Azure.</li>
+    </ul>
+  </div>
+</div>
+
+<footer>HD IT · Pipeline change log · latest version <b id="builtFor"></b></footer>
+
+<script>
+  const BUILT_FOR = "1.12.0";   // latest version this change log covers — regenerated with each release
+  document.getElementById("builtFor").textContent = "v" + BUILT_FOR;
+  const appV = new URLSearchParams(location.search).get("v");
+  const b = document.getElementById("verBanner");
+  if (appV && appV !== BUILT_FOR) {
+    b.className = "ver-banner warn";
+    b.innerHTML = "⚠ You're running app <b>v" + appV + "</b>. The latest version is <b>v" + BUILT_FOR + "</b> — a refresh may be needed to pick it up.";
+  } else {
+    b.className = "ver-banner ok";
+    b.innerHTML = "✓ You're on the latest version, <b>v" + BUILT_FOR + "</b>.";
+  }
+</script>
+</body>
+</html>
