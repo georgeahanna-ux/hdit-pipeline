@@ -23,11 +23,11 @@ env:
   RG: rg-hdit-pipeline-test-aue
   ENV_LABEL: Test
   # Not secrets: Azure only accepts tokens from this repo's "test" environment.
-  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID || '' }}   # id-hdit-pipeline-deploy-test-aue (printed by hdit-pulse setup/pulse-setup.sh pipeline)
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID || 'd7b48872-1d74-4a89-8048-6538769beee1' }}   # id-hdit-pipeline-deploy-test-aue
   AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID || '0b1e12e5-f6cd-4ae7-a9ff-4562637a0c44' }}
   AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID || '1d9bced5-726c-4ef9-a4d3-63c350b6647c' }}
   # HD IT Pulse address (not a secret). Lets Pulse frame this app and sign it in; empty = standalone only.
-  PULSE_ORIGIN: ${{ vars.PULSE_ORIGIN || '' }}
+  PULSE_ORIGIN: ${{ vars.PULSE_ORIGIN || 'https://ashy-sand-099e8e200.4.azurestaticapps.net' }}
 
 jobs:
   deploy:
