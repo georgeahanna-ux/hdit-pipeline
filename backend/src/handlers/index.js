@@ -6,12 +6,28 @@
  * identity { resourceId, name, role } as their first argument.
  */
 const at = require("../lib/autotask");
-const { setSecret, getAdminResourceIds } = require("../lib/keyvault");
+const { setSecret, getAdminResourceIds, secretsStatus } = require("../lib/keyvault");
+const pulse = require("../lib/pulse-auth");
+const pkg = require("../../package.json");
 const { requireAdmin, checkPassword, issueSession, checkOtp, otpRequired } = require("../lib/auth");
 
 const json = (status, body) => ({ status, jsonBody: body });
 
 /* ---------------- public (pre-auth) ---------------- */
+
+/** GET /health — version and whether the secrets exist (never their values). */
+async function health() {
+  const out = { ok: true, app: "pipeline", version: pkg.version, environment: process.env.APP_ENVIRONMENT || "unknown", keyVault: "ok", configured: {} };
+  try {
+    const s = await secretsStatus();
+    out.configured = {
+      teamPassword: s["app-password"], administrators: s["admin-resource-ids"],
+      autotask: s["autotask-api-username"] && s["autotask-api-secret"] && s["autotask-api-integration-code"] && s["autotask-base-url"],
+    };
+  } catch (e) { out.ok = false; out.keyVault = "error: " + (e.code || e.message); }
+  out.pulse = pulse.status();
+  return json(out.ok ? 200 : 503, out);
+}
 
 /** POST /resources  { password }  → active Autotask resources for the picker, + otpRequired flag */
 async function loginResources(body) {
@@ -33,7 +49,8 @@ async function login(body) {
 
 /** GET /me */
 async function me(identity) {
-  return json(200, { name: identity.name, role: identity.role, resourceId: identity.resourceId });
+  return json(200, { name: identity.name, role: identity.role, resourceId: identity.resourceId,
+    via: identity.via, email: identity.email, needsLink: !!identity.needsLink, linkSource: identity.linkSource || null });
 }
 
 /** GET /stages */
@@ -104,7 +121,7 @@ async function saveSettings(identity, _id, body) {
 }
 
 module.exports = {
-  loginResources, login,
+  health, loginResources, login,
   me, stages, opportunities, activities, addActivity,
   moveStage, patchOpp, companyTickets, associateTicket, listAdmins, saveAdmins, saveSettings,
 };

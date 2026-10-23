@@ -1,18 +1,20 @@
 {
-  "name": "pipeline-autotask-api",
-  "version": "1.0.0",
-  "description": "Single Azure Function that backs the Pipeline Kanban board. Authenticates users via Entra ID, talks to the Autotask REST API as the signed-in user, and stores config/sessions in Key Vault + Table Storage.",
+  "name": "hdit-pipeline-api",
+  "version": "1.13.0",
+  "private": true,
+  "description": "Pipeline API: a single Azure Function behind the Autotask opportunities Kanban board. HD IT Pulse (Entra ID) or team-password sign-in, Autotask REST, secrets in Key Vault.",
   "main": "src/index.js",
+  "engines": { "node": ">=22 <23" },
   "scripts": {
     "start": "func start",
-    "test": "echo \"no tests yet\""
+    "check": "node -e \"require('./src/index.js'); console.log('LOADED OK')\"",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "@azure/data-tables": "^13.2.2",
     "@azure/functions": "^4.5.0",
     "@azure/identity": "^4.4.1",
     "@azure/keyvault-secrets": "^4.8.0",
-    "@azure/data-tables": "^13.2.2",
-    "jwks-rsa": "^3.1.0",
     "jsonwebtoken": "^9.0.2",
     "otplib": "^12.0.1"
   }

@@ -12,6 +12,10 @@
  * The signing key is derived from the shared password, so no extra secret is
  * needed and rotating the password invalidates outstanding sessions.
  *
+ * HD IT Pulse: inside Pulse, requests carry an Entra ID access token instead, checked by
+ * pulse-auth.js (roles Pipeline.User / Pipeline.Admin / Pulse.Admin). The team password keeps
+ * working alongside it until LEGACY_PASSWORD_LOGIN is set to "off".
+ *
  * Role model: "administrator" if the resource id is listed in the Key Vault
  * admin-resource-ids secret, otherwise "user".
  */
@@ -19,6 +23,7 @@ const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
 const { authenticator } = require("otplib");
 const { getAppPassword, getAdminResourceIds, getSecret } = require("./keyvault");
+const pulse = require("./pulse-auth");
 
 // Allow ±1 time-step (±30s) so a slightly fast/slow clock or a code typed right on the
 // boundary still validates.
@@ -28,8 +33,8 @@ const SESSION_TTL = "12h";
 
 async function sessionKey() {
   const pw = await getAppPassword();
-  if (!pw) { const e = new Error("app-password is not set in Key Vault"); e.status = 500; throw e; }
-  return crypto.createHash("sha256").update(String(pw) + "|pipeline-session-v1").digest("hex");
+  if (!pw) { const e = new Error("The team password hasn't been set yet. An administrator needs to add it to Key Vault (see docs/AZURE-SETUP.md)."); e.status = 503; throw e; }
+  return crypto.createHash("sha256").update(String(pw) + "|" + (process.env.APP_SESSION_SALT || "pipeline-session-v1")).digest("hex");
 }
 
 function safeEqual(a, b) {
@@ -40,8 +45,9 @@ function safeEqual(a, b) {
 
 /** True if the supplied password matches the shared app password. */
 async function checkPassword(pw) {
+  if (!pulse.legacyEnabled()) throw pulse.fail(403, "Pipeline now signs in through HD IT Pulse.", "pulse-only");
   const real = await getAppPassword();
-  if (!real) { const e = new Error("app-password is not set in Key Vault"); e.status = 500; throw e; }
+  if (!real) { const e = new Error("The team password hasn't been set yet. An administrator needs to add it to Key Vault (see docs/AZURE-SETUP.md)."); e.status = 503; throw e; }
   return safeEqual(pw == null ? "" : pw, real);
 }
 
@@ -86,10 +92,12 @@ async function authenticate(request) {
   const header = request.headers.get("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
   if (!token) { const e = new Error("Missing session token"); e.status = 401; throw e; }
+  if (pulse.enabled() && pulse.looksLikeEntra(token)) return pulse.authenticateEntra(token);
+  if (!pulse.legacyEnabled()) throw pulse.fail(401, "Sign in through HD IT Pulse.", "pulse-only");
   let claims;
   try { claims = jwt.verify(token, await sessionKey()); }
   catch { const e = new Error("Your session has expired. Please sign in again."); e.status = 401; throw e; }
-  return { resourceId: claims.rid, name: claims.name, role: claims.role };
+  return { via: "password", resourceId: claims.rid, name: claims.name, role: claims.role };
 }
 
 function requireAdmin(identity) {

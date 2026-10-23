@@ -7,9 +7,12 @@
  * verified in ./lib/auth.
  *
  * Route table (all under /api):
+ *   GET    /health                 (public — version + whether secrets are configured)
  *   POST   /resources              (public — password -> resource picker list)
  *   POST   /login                  (public — password + resourceId -> token)
  *   GET    /me
+ *   GET    /link/resources         (Pulse sign-in — Autotask names to link to, when email didn't match)
+ *   POST   /link                   (Pulse sign-in — save which Autotask resource you are)
  *   GET    /stages
  *   GET    /opportunities
  *   GET    /opportunities/{id}/activities
@@ -22,6 +25,7 @@
  */
 const { app } = require("@azure/functions");
 const { authenticate } = require("./lib/auth");
+const pulse = require("./lib/pulse-auth");
 const H = require("./handlers");
 
 // CORS is owned by the Azure Functions PLATFORM, not this code. The host answers the OPTIONS
@@ -34,13 +38,19 @@ const cors = {
   "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, OPTIONS",
 };
 
+const security = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
+
 async function readBody(request) { try { return await request.json(); } catch { return {}; } }
 
 function match(method, segs) {
   const [a, b, c] = segs;
   // public (pre-auth)
+  if (a === "health" && !b && method === "GET") return { fn: "health", public: true };
   if (a === "resources" && method === "POST") return { fn: "loginResources", public: true };
   if (a === "login" && method === "POST") return { fn: "login", public: true };
+  // HD IT Pulse: link your Autotask name (only when your email didn't match)
+  if (a === "link" && b === "resources" && !c && method === "GET") return { fn: "linkResources", pulse: true };
+  if (a === "link" && !b && method === "POST") return { fn: "link", pulse: true };
   // authenticated
   if (method === "GET" && a === "me") return { fn: "me" };
   if (method === "GET" && a === "stages") return { fn: "stages" };
@@ -72,7 +82,7 @@ app.http("api", {
 
     try {
       const route = match(request.method, segs);
-      if (!route) return { status: 404, headers: cors, jsonBody: { message: "Not found" } };
+      if (!route) return { status: 404, headers: { ...cors, ...security }, jsonBody: { message: "Not found" } };
 
       const body = ["POST", "PATCH", "PUT"].includes(request.method) ? await readBody(request) : null;
 
@@ -81,13 +91,20 @@ app.http("api", {
         result = await H[route.fn](body);
       } else {
         const identity = await authenticate(request);   // throws 401/403
-        result = await H[route.fn](identity, route.id, body);
+        // Signed in through Pulse but not yet matched to an Autotask resource: only /me and /link work.
+        if (identity.needsLink && !route.pulse && route.fn !== "me") throw pulse.fail(409, "Link your Autotask name to continue.", "link-required");
+        result = route.pulse
+          ? await pulse[route.fn](identity, route.id, body)
+          : await H[route.fn](identity, route.id, body);
       }
-      return { ...result, headers: { ...cors, ...(result.headers || {}) } };
+      return { ...result, headers: { ...cors, ...security, ...(result.headers || {}) } };
     } catch (err) {
       const status = err.status || 500;
       context.error(err);
-      return { status, headers: cors, jsonBody: { message: err.message || "Server error" } };
+      const message = status >= 500 && !err.status ? "Something went wrong on the server. Check Application Insights for details." : (err.message || "Server error");
+      return { status, headers: { ...cors, ...security }, jsonBody: err.expose && err.code ? { message, code: err.code } : { message } };
     }
   },
 });
+
+module.exports = { match };

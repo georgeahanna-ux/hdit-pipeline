@@ -1,0 +1,163 @@
+name: Deploy to test
+
+# Builds, tests and deploys the Pipeline to the HD IT Azure test tenancy.
+# Signs in to Azure with OpenID Connect as the user-assigned identity
+# id-hdit-pipeline-deploy-test-aue (Contributor on rg-hdit-pipeline-test-aue). No secrets are stored in GitHub.
+# Tenant, subscription and the deploy identity's client ID default to the HD IT test tenancy;
+# repository variables AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID override them.
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-test
+  cancel-in-progress: false
+
+env:
+  RG: rg-hdit-pipeline-test-aue
+  ENV_LABEL: Test
+  # Not secrets: Azure only accepts tokens from this repo's "test" environment.
+  AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID || '' }}   # id-hdit-pipeline-deploy-test-aue (printed by hdit-pulse setup/pulse-setup.sh pipeline)
+  AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID || '0b1e12e5-f6cd-4ae7-a9ff-4562637a0c44' }}
+  AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID || '1d9bced5-726c-4ef9-a4d3-63c350b6647c' }}
+  # HD IT Pulse address (not a secret). Lets Pulse frame this app and sign it in; empty = standalone only.
+  PULSE_ORIGIN: ${{ vars.PULSE_ORIGIN || '' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: test          # must match the federated credential subject
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Backend - install, test, check
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm prune --omit=dev
+          npm run check
+
+      - name: Check Azure is set up
+        id: azure
+        run: |
+          if [ -z "$AZURE_CLIENT_ID" ]; then
+            echo "::warning title=Not deployed::Azure isn't set up for this repo yet. Run the one-off steps in docs/AZURE-SETUP.md, then set the repository variable AZURE_CLIENT_ID. Build and tests passed."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sign in to Azure (OIDC)
+        if: steps.azure.outputs.ready == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Infrastructure - Bicep
+        if: steps.azure.outputs.ready == 'true'
+        run: |
+          NAME="pipeline-${{ github.run_number }}-${{ github.run_attempt }}"
+          set +e
+          az deployment group create \
+            --resource-group "$RG" \
+            --name "$NAME" \
+            --template-file infra/main.bicep \
+            --parameters infra/test.bicepparam \
+            --query properties.outputs -o json > outputs.json 2> deploy-err.txt
+          rc=$?
+          set -e
+          if [ $rc -ne 0 ]; then
+            # Surface Azure's reasons as annotations so they show on the run page and in the API.
+            cat deploy-err.txt
+            echo "::error title=Bicep deployment failed::$(tr '\n' ' ' < deploy-err.txt | cut -c1-4000)"
+            az deployment operation group list -g "$RG" -n "$NAME" \
+              --query "[?properties.provisioningState=='Failed'].{resource:properties.targetResource.resourceName,type:properties.targetResource.resourceType,code:properties.statusMessage.error.code,message:properties.statusMessage.error.message,detail:properties.statusMessage.error.details[0].message}" \
+              -o json > failed-ops.json 2>/dev/null || echo "[]" > failed-ops.json
+            jq -c '.[]' failed-ops.json | while read -r op; do echo "::error title=Failed resource::$(echo "$op" | cut -c1-4000)"; done
+            exit 1
+          fi
+          jq . outputs.json
+          {
+            echo "FUNC_NAME=$(jq -r .functionAppName.value outputs.json)"
+            echo "FUNC_HOST=$(jq -r .functionHostname.value outputs.json)"
+            echo "SWA_NAME=$(jq -r .staticWebAppName.value outputs.json)"
+            echo "SWA_HOST=$(jq -r .staticWebAppHostname.value outputs.json)"
+            echo "KV_NAME=$(jq -r .keyVaultName.value outputs.json)"
+          } >> "$GITHUB_ENV"
+
+      - name: Backend - deploy to Function App
+        if: steps.azure.outputs.ready == 'true'
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.FUNC_NAME }}
+          package: backend
+          sku: flexconsumption
+
+      - name: Frontend - build
+        if: steps.azure.outputs.ready == 'true'
+        run: node scripts/build-frontend.mjs "https://${FUNC_HOST}/api" "$ENV_LABEL" "https://${FUNC_HOST}" "$PULSE_ORIGIN"
+
+      - name: Frontend - get deployment token
+        if: steps.azure.outputs.ready == 'true'
+        run: |
+          TOKEN=$(az staticwebapp secrets list --name "$SWA_NAME" --query properties.apiKey -o tsv)
+          echo "::add-mask::$TOKEN"
+          echo "SWA_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Frontend - deploy to Static Web App
+        if: steps.azure.outputs.ready == 'true'
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ env.SWA_TOKEN }}
+          action: upload
+          app_location: dist
+          output_location: ""
+          skip_app_build: true
+
+      - name: Smoke test
+        if: steps.azure.outputs.ready == 'true'
+        run: |
+          want=$(jq -r .version backend/package.json)
+          echo "Waiting for the API to answer as v$want..."
+          for i in $(seq 1 24); do
+            code=$(curl -s -o health.json -w "%{http_code}" "https://${FUNC_HOST}/api/health" || true)
+            got=$(jq -r .version health.json 2>/dev/null || echo "?")
+            if [ "$code" = "200" ] && [ "$got" = "$want" ]; then break; fi
+            echo "  attempt $i: HTTP $code, version $got"; sleep 10
+          done
+          if [ "$got" != "$want" ]; then echo "::warning title=Version not live yet::API still reports v$got after 4 minutes (expected v$want)."; fi
+          echo "Health (HTTP $code):"; cat health.json; echo
+          echo "CORS preflight from the site:"
+          curl -s -i -X OPTIONS "https://${FUNC_HOST}/api/opportunities" \
+            -H "Origin: https://${SWA_HOST}" -H "Access-Control-Request-Method: GET" \
+            -H "Access-Control-Request-Headers: authorization" | grep -i -E "^HTTP|access-control-allow-origin" || true
+          site=$(curl -s -o /dev/null -w "%{http_code}" "https://${SWA_HOST}/")
+          echo "Site: HTTP $site"
+          {
+            echo "## Pipeline deployed to test"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| App | https://${SWA_HOST} |"
+            echo "| API | https://${FUNC_HOST}/api |"
+            echo "| Key Vault | ${KV_NAME} |"
+            echo "| Health | \`$(tr -d '\n' < health.json)\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::notice title=App::https://${SWA_HOST}"
+          echo "::notice title=API health::$(tr -d '\n' < health.json | cut -c1-1000)"
+          [ "$code" = "200" ] && [ "$site" = "200" ]

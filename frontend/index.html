@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
 <!-- Single-file app: all styles and logic are inline; no external CDNs required -->
-<!-- Microsoft SSO removed: the app now authenticates with a team password + Autotask resource picker -->
+<!-- Sign-in: through HD IT Pulse (Microsoft 365 / Entra ID) when framed by it; otherwise team password + Autotask resource picker -->
 <style>
   /* ============================================================
      DESIGN TOKENS
@@ -385,6 +385,11 @@
   @media (prefers-reduced-motion:reduce){
     *{animation-duration:.001ms !important; transition-duration:.001ms !important; scroll-behavior:auto !important}
   }
+/* ---------- inside HD IT Pulse ---------- */
+.in-pulse #signOutBtn{display:none!important}
+.in-pulse #login .login-card > p{display:none}
+.pulse-note{font-size:12px;color:#64748b;padding:6px 12px 8px;border-top:1px solid rgba(100,116,139,.2);margin-top:4px}
+.pulse-link{text-align:center;font-size:13px;font-weight:600;margin-top:10px}
 </style>
 </head>
 <body>
@@ -405,6 +410,7 @@
     <div class="login-divider">or</div>
     <button class="btn-ghost" id="demoLogin">Explore the demo board</button>
     <div class="login-note" id="loginNote"></div>
+    <a class="pulse-link" id="lgPulse" style="display:none">Open in HD IT Pulse →</a>
   </div>
 </div>
 
@@ -556,10 +562,12 @@
 /* =========================================================================
    CONFIG  — flip these two lines to go live.
    ========================================================================= */
+const DEPLOY = { apiBase: "__API_BASE__", environment: "__ENVIRONMENT__", pulseOrigin: "__PULSE_ORIGIN__" };   // filled in by the deploy pipeline
 const CONFIG = {
-  APP_VERSION: "1.12.0",                                           // shown in the UI; bump on each release (see CHANGELOG.md)
-  DEMO_MODE: false,                                               // true = sample data, no backend
-  API_BASE: "https://func-hdit-pipeline-prod-aue.azurewebsites.net/api", // new CAF Function App (Australia East)
+  APP_VERSION: "1.13.0",                                           // shown in the UI; bump on each release (see CHANGELOG.md)
+  DEMO_MODE: DEPLOY.apiBase.startsWith("__"),                     // no backend address = sample data, no backend
+  API_BASE: DEPLOY.apiBase.startsWith("__") ? "" : DEPLOY.apiBase, // the Function App, set at deploy time
+  ENVIRONMENT: DEPLOY.environment.startsWith("__") ? "Demo" : DEPLOY.environment,
   AUTOTASK_UI_BASE: "https://ww29.autotask.net",                  // Autotask web zone, for "Open in Autotask"
   QUOTE_BASE: "https://redirect.dattocommerce.com/v1/Autotask/tenants/700659/quotes", // Datto Commerce quote links
   TICKET_BASE: "https://ww29.autotask.net/Mvc/ServiceDesk/TicketDetail.mvc", // linked-ticket links
@@ -568,6 +576,88 @@ const CONFIG = {
 };
 // Stamp the version into every .app-ver element (brand subtitles on login + board).
 document.querySelectorAll(".app-ver").forEach(el => el.textContent = "v" + CONFIG.APP_VERSION);
+
+/* =========================================================================
+   HD IT PULSE — when Pipeline is opened inside HD IT Pulse, Pulse signs the person in
+   with Microsoft 365 (Entra ID) and hands this page an access token over postMessage.
+   Only the Pulse address baked in at deploy time can send or receive those messages, and
+   the site's Content-Security-Policy only lets that address frame Pipeline.
+   Shared approach with Marketing ROI and Whitespace Matrix.
+   ========================================================================= */
+const Pulse = (() => {
+  const origin = /^https:\/\/[^/]+$/.test(DEPLOY.pulseOrigin || "") ? DEPLOY.pulseOrigin : "";
+  const active = !!origin && !CONFIG.DEMO_MODE && window.parent !== window;
+  const waiting = new Map(); let seq = 0, cached = null, linking = false;
+  if (active) {
+    document.documentElement.classList.add("in-pulse");
+    window.addEventListener("message", e => {
+      if (e.origin !== origin || e.source !== window.parent) return;
+      const m = e.data || {};
+      if (m.type === "pulse:token" && waiting.has(m.id)) {
+        const w = waiting.get(m.id); waiting.delete(m.id); clearTimeout(w.timer);
+        m.error ? w.reject(new Error(m.error)) : w.resolve(m.token);
+      }
+    });
+  }
+  const expiry = t => { try { return JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp * 1000; } catch (e) { return 0; } };
+  function token(force) {
+    if (!force && cached && expiry(cached) - Date.now() > 120000) return Promise.resolve(cached);
+    const id = ++seq;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { if (waiting.delete(id)) reject(new Error("HD IT Pulse didn't answer. Reload the page.")); }, 30000);
+      waiting.set(id, { resolve: t => { cached = t; resolve(t); }, reject, timer });
+      window.parent.postMessage({ type: "pulse:token-request", app: "pipeline", id, force: !!force }, origin);
+    });
+  }
+  function card(note, { picker = false, error = "" } = {}) {
+    $("#login").style.display = "";
+    $("#app").classList.remove("ready");
+    $("#appPassword").style.display = "none"; $("#pwContinue").style.display = "none";
+    $("#otpInput").style.display = "none";
+    document.querySelectorAll("#login .login-divider, #demoLogin").forEach(el => el.style.display = "none");
+    $("#pickWrap").style.display = picker ? "block" : "none";
+    $("#enterBtn").disabled = false; $("#enterBtn").textContent = "Link my name";
+    const h = document.querySelector("#login h1"); if (h) h.textContent = picker ? "Choose your Autotask name" : "Opening your pipeline";
+    $("#loginNote").innerHTML = esc(note) + (error ? `<br><span style="color:#dc2626">${esc(error)}</span>` : "");
+  }
+  async function showLink() {
+    linking = true;
+    card("Signing you in with HD IT Pulse…");
+    try {
+      const r = await Api.raw("/link/resources");
+      $("#resourceSelect").innerHTML = (r.resources || []).map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join("");
+      card(`Pulse couldn't match ${r.email || "your Microsoft 365 email"} to an Autotask resource. Choose your name once; every change you make is recorded under it.`, { picker: true });
+    } catch (e) { card("Couldn't load the Autotask names.", { error: e.message }); }
+  }
+  async function saveLink() {
+    $("#enterBtn").disabled = true;
+    try { await Api.raw("/link", { method: "POST", body: JSON.stringify({ resourceId: Number($("#resourceSelect").value) }) }); linking = false; start(); }
+    catch (e) { $("#enterBtn").disabled = false; $("#loginNote").innerHTML = `<span style="color:#dc2626">${esc(e.message)}</span>`; }
+  }
+  async function start() {
+    card("Signing you in with HD IT Pulse…");
+    let me;
+    try { me = await Api.raw("/me"); }
+    catch (e) { card("You can't open Pipeline yet.", { error: e.message }); return; }
+    if (me.needsLink) return showLink();
+    if (me.linkSource === "link" && !$("#pulseRelink")) {
+      const b = document.createElement("button"); b.id = "pulseRelink"; b.type = "button"; b.textContent = "Change my Autotask name";
+      b.onclick = () => { closeMenu(); showLink(); };
+      $("#signOutBtn").parentNode.insertBefore(b, $("#signOutBtn"));
+    }
+    if (!$("#pulseNote")) {
+      const n = document.createElement("div"); n.id = "pulseNote"; n.className = "pulse-note"; n.textContent = "Signed in with Microsoft 365 through HD IT Pulse";
+      $("#signOutBtn").parentNode.insertBefore(n, $("#signOutBtn"));
+    }
+    await boot();
+  }
+  /** Outside Pulse: offer a way into it from the sign-in card. */
+  function offerPulse() {
+    const a = $("#lgPulse");
+    if (a && origin && !CONFIG.DEMO_MODE) { a.href = origin + "/#/app/pipeline"; a.style.display = "block"; }
+  }
+  return { origin, active, token, start, showLink, saveLink, offerPulse, isLinking: () => linking };
+})();
 
 /* =========================================================================
    SMALL HELPERS
@@ -688,7 +778,21 @@ const Api = (() => {
   let token = null;
   const setToken = t => token = t;
 
+  /** Inside Pulse: call with Pulse's token, one retry with a fresh token on 401. */
+  async function pulseCall(path, opts={}, retried=false){
+    const res = await fetch(CONFIG.API_BASE + path, { ...opts,
+      headers: { "Content-Type":"application/json", Authorization: "Bearer " + await Pulse.token(retried), ...(opts.headers||{}) } });
+    if(res.status===401 && !retried) return pulseCall(path, opts, true);
+    if(!res.ok){
+      const j = await res.json().catch(()=>({}));
+      if(j.code==="link-required" && !Pulse.isLinking()) setTimeout(Pulse.showLink, 0);
+      throw new Error(j.message||("Request failed ("+res.status+")"));
+    }
+    return res.status===204 ? null : res.json();
+  }
+
   async function call(path, opts={}){
+    if(Pulse.active) return pulseCall(path, opts);
     const res = await fetch(CONFIG.API_BASE + path, {
       ...opts,
       headers: { "Content-Type":"application/json",
@@ -722,7 +826,7 @@ const Api = (() => {
     saveAdmins:(list)             => call("/admins",{method:"PUT",body:JSON.stringify({admins:list})}),
   };
 
-  return { setToken, live, isLive: ()=>!CONFIG.DEMO_MODE && !!CONFIG.API_BASE };
+  return { setToken, live, raw: call, isLive: ()=>!CONFIG.DEMO_MODE && !!CONFIG.API_BASE };
 })();
 
 /* =========================================================================
@@ -884,7 +988,7 @@ async function tryRestore(){
 async function boot(){
   const B = Backend();
   try{
-    $("#envPill").textContent = CONFIG.DEMO_MODE ? "Demo data" : "Live · Autotask";
+    $("#envPill").textContent = CONFIG.DEMO_MODE ? "Demo data" : ("Live · " + CONFIG.ENVIRONMENT);
     $("#envPill").className = "env-pill" + (CONFIG.DEMO_MODE ? " demo" : "");
     State.me = await B.me();
     State.admins = await B.admins().catch(()=>[]);
@@ -1488,11 +1592,11 @@ $("#setScrim").addEventListener("mousedown", e=>{ if(e.target.id==="setScrim") $
    WIRING
    ========================================================================= */
 $("#pwContinue").onclick = pwContinue;
-$("#enterBtn").onclick = enterPipeline;
+$("#enterBtn").onclick = () => Pulse.active ? Pulse.saveLink() : enterPipeline();
 $("#appPassword").addEventListener("keydown", e=>{ if(e.key==="Enter") pwContinue(); });
 $("#otpInput").addEventListener("keydown", e=>{ if(e.key==="Enter") enterPipeline(); });
 $("#demoLogin").onclick = startDemo;
-tryRestore();
+if(Pulse.active) Pulse.start(); else { Pulse.offerPulse(); tryRestore(); }
 $("#refreshBtn").onclick = ()=>{
   if(State.dirty.size){ if(!confirm("You have unsaved changes that will be lost on refresh. Continue?")) return; State.dirty.clear(); }
   loadBoard(false);

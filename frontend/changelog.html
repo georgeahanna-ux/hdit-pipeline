@@ -45,7 +45,19 @@
   <h1>What's new in Pipeline</h1>
 
   <div class="rel current">
-    <h2>v1.12.0 <span class="tag">current</span></h2>
+    <h2>v1.13.0 <span class="tag">current</span></h2>
+    <div class="date">23 October 2026</div>
+    <div class="kind">Added</div>
+    <ul>
+      <li><b>Runs inside HD IT Pulse.</b> Open Pipeline from Pulse and you're signed in with your Microsoft 365 account. No team password or authenticator code.</li>
+      <li>Access comes from your Pulse group: <b>Pulse - Pipeline Users</b>, or <b>Pulse - Pipeline Admins</b> for Settings.</li>
+      <li>Your Autotask name is matched from your Microsoft 365 email. If it can't be, Pipeline asks you to choose it once.</li>
+      <li>The team password still works at Pipeline's own address for now. <b>Open in HD IT Pulse</b> on the sign-in screen takes you to Pulse.</li>
+    </ul>
+  </div>
+
+  <div class="rel">
+    <h2>v1.12.0</h2>
     <div class="date">24 June 2026</div>
     <div class="kind">Changed</div>
     <ul>
@@ -182,7 +194,7 @@
 <footer>HD IT · Pipeline change log · latest version <b id="builtFor"></b></footer>
 
 <script>
-  const BUILT_FOR = "1.12.0";   // latest version this change log covers — regenerated with each release
+  const BUILT_FOR = "1.13.0";   // latest version this change log covers — regenerated with each release
   document.getElementById("builtFor").textContent = "v" + BUILT_FOR;
   const appV = new URLSearchParams(location.search).get("v");
   const b = document.getElementById("verBanner");

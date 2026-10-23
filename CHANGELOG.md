@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/), and the 
 uses semantic-style versioning (`MAJOR.MINOR.PATCH`). The version shown in the app header
 is set by `CONFIG.APP_VERSION` in `index.html` — bump it whenever you add an entry here.
 
+## [1.13.0] - 2026-10-23
+### Added
+- **HD IT Pulse sign-in (Entra ID).** Inside Pulse, Pipeline takes its access token from Pulse over
+  `postMessage` (exact origins only) and the backend verifies it (`lib/pulse-auth.js`: signature,
+  tenant, audience, `access_as_user` scope). Roles `Pipeline.User`, `Pipeline.Admin` and `Pulse.Admin`
+  decide access and administrator. The person's Autotask resource is matched by email, or linked once
+  (`GET /link/resources`, `POST /link`).
+- `GET /health` (version, Key Vault secrets present, Pulse status).
+- Same layout as Marketing ROI and Whitespace: `frontend/`, `backend/`, `infra/main.bicep`, and a GitHub
+  Actions deploy to the test tenancy (`rg-hdit-pipeline-test-aue`). Tests with `node --test`.
+### Changed
+- API address, environment and Pulse address are filled in at deploy time (`scripts/build-frontend.mjs`);
+  with none, the page opens on demo data. Content-Security-Policy added; only Pulse may frame Pipeline.
+- Key Vault access uses the Function's managed identity; a missing secret reads as "not set up" instead
+  of an error. The team password keeps working while `LEGACY_PASSWORD_LOGIN` is `on`.
+### Removed
+- The unused MSAL bundle and the `jwks-rsa` dependency from the earlier Microsoft sign-in attempt.
+
 ## [1.12.0] - 2026-06-24
 ### Changed
 - The **Associate existing ticket** picker is now searchable (type to filter by ticket number or
